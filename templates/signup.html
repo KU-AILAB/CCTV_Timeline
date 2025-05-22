@@ -1,0 +1,40 @@
+<!-- templates/signup.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>회원가입</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-box">
+      <button type="button" class="back-button" onclick="location.href='/'">← 이전</button>
+      <h1 class="auth-title">회원가입</h1>
+      <form method="POST" action="{{ url_for('signup') }}" class="auth-form">
+        <label for="username">아이디</label>
+        <input type="text" name="username" id="username" required>
+
+        <label for="password">비밀번호</label>
+        <input type="password" name="password" id="password" required>
+
+        <button type="submit">회원가입</button>
+      </form>
+      <p class="auth-footer">
+        이미 계정이 있으신가요?
+        <a href="{{ url_for('login') }}">로그인</a>
+      </p>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <ul class="auth-messages">
+            {% for msg in messages %}
+              <li>{{ msg }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
+    </div>
+  </div>
+</body>
+</html>

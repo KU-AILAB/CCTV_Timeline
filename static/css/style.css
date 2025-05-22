@@ -1,0 +1,463 @@
+/* ------------------------------
+   전역 스타일
+------------------------------ */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Arial', sans-serif;
+  background-color: #121212;
+  color: #e0e0e0;
+  text-align: center;
+}
+
+.container {
+  width: 90%;
+  max-width: 1000px;
+  margin: 30px auto;
+  background: #1e1e1e;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+/* ------------------------------
+   네비게이션
+------------------------------ */
+.nav-list {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  list-style: none;
+  display: flex;
+  gap: 1rem;
+}
+.nav-list li a {
+  text-decoration: none;
+  font-weight: bold;
+  color: #fff;
+}
+
+/* ------------------------------
+   업로드 폼
+------------------------------ */
+form {
+  margin-bottom: 20px;
+}
+
+input[type="file"],
+input[type="text"] {
+  padding: 10px;
+  border-radius: 5px;
+  background: #2a2a2a;
+  color: white;
+  border: 1px solid #444;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+button {
+  padding: 10px 15px;
+  background: #007bff;
+  border: none;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background 0.3s;
+}
+
+button:hover {
+  background: #0056b3;
+}
+
+/* ------------------------------
+   업로드 진행률
+------------------------------ */
+.upload-progress-container {
+  width: 100%;
+  margin: 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upload-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #444;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.upload-progress {
+  width: 0%;
+  height: 100%;
+  background: #4caf50;
+  transition: width 0.2s ease;
+}
+
+/* ------------------------------
+   비디오 플레이어
+------------------------------ */
+.player-container {
+  width: 640px;
+  height: 360px;
+  margin: 0 auto 20px;
+  position: relative;
+  background-color: #000;
+}
+
+.player-container video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  border: 2px solid #444;
+}
+
+/* ------------------------------
+   타임라인 컨테이너
+------------------------------ */
+.timeline-container {
+  width: 640px;
+  margin: 20px auto 0;
+  position: relative;
+  background-color: #222;
+  padding: 10px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.2);
+  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: auto;      /* 수평 스크롤 허용 */
+  padding-bottom: 8px;
+}
+
+#timelines {
+  position: relative;
+  width: 100%;
+  height: 10px;
+  background: #555;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.segment-detected {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: #f44336;
+  cursor: pointer;
+}
+
+.timeline-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 100%;
+  background: red;
+  z-index: 10;
+}
+
+.frames-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  width: max-content;
+  overflow-x: auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* ------------------------------
+   프레임 썸네일
+------------------------------ */
+.timeline-frame {
+  width: 100px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: transform 0.2s ease-in-out;
+}
+
+.timeline-frame:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.timeline-frame img {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.timeline-frame.detected-frame {
+  border: 2px solid red;
+  box-shadow: 0 0 8px red;
+}
+
+/* ------------------------------
+   탐지 결과
+------------------------------ */
+.detection-results {
+  margin-top: 20px;
+  padding: 15px;
+  background: #1e1e1e;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.detection-results h2 {
+  font-size: 22px;
+  margin-bottom: 15px;
+}
+
+.detection-results a {
+  display: block;
+  padding: 10px;
+  margin: 5px auto;
+  background: #28a745;
+  color: white;
+  text-decoration: none;
+  border-radius: 5px;
+  transition: background 0.3s;
+  width: 200px;
+}
+
+.detection-results a:hover {
+  background: #218838;
+}
+
+/* ------------------------------
+   CSV 결과 표
+------------------------------ */
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.result-table th,
+.result-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+/* ------------------------------
+   레이아웃 (좌우 패널)
+------------------------------ */
+.row-content {
+  display: flex;
+  gap: 20px;
+}
+
+.left-panel {
+  flex: 1;
+  width: auto;
+}
+
+.right-panel {
+  width: 300px;
+}
+
+/* ------------------------------
+   서버 영상 목록 스크롤
+------------------------------ */
+.server-videos-container {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 20px;
+  background: #333;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.scroll-list .video-item {
+  padding: 8px;
+  margin-bottom: 5px;
+  background: #444;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.scroll-list .video-item:hover {
+  background: #555;
+}
+
+/* ------------------------------
+   로그인·회원가입 페이지 공통
+------------------------------ */
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 60px);
+  background: #181818;
+}
+
+.auth-box {
+  width: 320px;
+  background: #222;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.auth-title {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #fff;
+  font-size: 1.5rem;
+}
+
+.auth-form label {
+  display: block;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: #ccc;
+  font-size: 0.9rem;
+}
+
+.auth-form input {
+  width: 100%;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.auth-form button {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 4px;
+  background: #0066ff;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.auth-form button:hover {
+  background: #0055dd;
+}
+
+.auth-footer {
+  text-align: center;
+  margin-top: 1rem;
+  color: #aaa;
+  font-size: 0.85rem;
+}
+
+.auth-footer a {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.auth-messages {
+  margin-top: 1rem;
+  list-style: none;
+  padding: 0;
+}
+
+.auth-messages li {
+  color: #f33;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.back-button {
+  display: inline-block;
+  margin-bottom: 1rem;
+  padding: 0.25rem 0.5rem;
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.back-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+/* ------------------------------
+   내 업로드 목록 페이지
+------------------------------ */
+.my-uploads-container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 0 20px;
+  color: #eee;
+}
+
+.my-uploads-container h1 {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 1.8em;
+}
+
+.my-uploads-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.my-uploads-table th,
+.my-uploads-table td {
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid #444;
+}
+
+.my-uploads-table th {
+  background-color: #333;
+  font-weight: normal;
+}
+
+.my-uploads-table tr:nth-child(even) {
+  background-color: #222;
+}
+
+.my-uploads-table tr:hover {
+  background-color: #2a2a2a;
+}
+
+/* 진행도 막대 */
+.progress-cell {
+  display: flex;
+  align-items: center;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background-color: #444;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-right: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #4caf50;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+
+/* startTime 레이블 아래에 공백 추가 */
+label[for="startTime"] {
+  display: inline-block;   /* 또는 block, 필요에 따라 선택 */
+  margin-bottom: 8px;      /* 원하는 만큼 조절 */
+}

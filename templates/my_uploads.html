@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>내 업로드 목록</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header>
+    <nav>
+      <ul class="nav-list">
+        <li><a href="{{ url_for('index') }}">메인으로</a></li>
+        <li><a href="{{ url_for('logout') }}">로그아웃</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <div class="my-uploads-container">
+    <h1>내 업로드 목록</h1>
+    <table class="my-uploads-table">
+      <thead>
+        <tr>
+          <th>파일명</th>
+          <th>진행도</th>
+          <th>업로드 시각</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in uploads %}
+        <tr>
+          <td>{{ v.filename }}</td>
+          <td>
+            <div class="progress-cell">
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ v.progress }}%;"></div>
+              </div>
+              <span class="progress-text">{{ "%.2f"|format(v.progress) }}%</span>
+            </div>
+          </td>
+          <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</body>
+</html>
