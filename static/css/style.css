@@ -178,3 +178,28 @@ body {
     flex-direction: column;
   }
 }
+
+/* --------------------------------------------------
+   업로드/검출 Flex 행 추가 규칙
+--------------------------------------------------- */
+/* 컨테이너 */
+.upload-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* 레이블 간격 조정 */
+.upload-row .form-label {
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+/* input-group-sm, btn-sm 높이 통일 */
+.upload-row .input-group-sm .form-control,
+.upload-row .input-group-sm .input-group-text,
+.upload-row .btn-sm {
+  /* Bootstrap input-group-sm 기본 높이 계산식 사용 */
+  height: calc(1.5em + 0.5rem + 2px);
+}
