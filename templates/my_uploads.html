@@ -1,49 +1,74 @@
+<!-- templates/my_uploads.html -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>내 업로드 목록</title>
+  <title>내 업로드 목록 | KKU AI TIMELINE</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
-  <header>
-    <nav>
-      <ul class="nav-list">
-        <li><a href="{{ url_for('index') }}">메인으로</a></li>
-        <li><a href="{{ url_for('logout') }}">로그아웃</a></li>
-      </ul>
-    </nav>
-  </header>
+<body class="bg-light">
 
-  <div class="my-uploads-container">
-    <h1>내 업로드 목록</h1>
-    <table class="my-uploads-table">
-      <thead>
-        <tr>
-          <th>파일명</th>
-          <th>진행도</th>
-          <th>업로드 시각</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for v in uploads %}
-        <tr>
-          <td>{{ v.filename }}</td>
-          <td>
-            <div class="progress-cell">
-              <div class="progress-bar">
-                <div class="progress-fill" style="width: {{ (v.progress * 100)|round(2) }}%;"></div>
-              </div>
-              <span class="progress-text">{{ (v.progress * 100)|round(2) }}%</span>
-            </div>
-          </td>
-          
-          <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <!-- 네비게이션바 (index.html과 동일) -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm fixed-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">KKU AI TIMELINE</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#navbarNav" aria-controls="navbarNav"
+              aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">메인으로</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">로그아웃</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 본문 -->
+  <div class="container my-5 pt-5">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h5 class="mb-0">내 업로드 목록</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive server-table-wrapper">
+          <table class="table table-striped mb-0">
+            <thead class="bg-light">
+              <tr>
+                <th class="ps-3">파일명</th>
+                <th>진행도</th>
+                <th>업로드 시각</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for v in uploads %}
+              <tr>
+                <td class="ps-3 text-truncate" style="max-width:300px;">
+                  {{ v.filename }}
+                </td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <div class="progress flex-grow-1 me-2" style="height:8px;">
+                      <div class="progress-bar" role="progressbar"
+                           style="width: {{ v.progress }}%;"></div>
+                    </div>
+                    <small class="text-muted">{{ '%.2f'|format(v.progress) }}%</small>
+                  </div>
+                </td>
+                <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

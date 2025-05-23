@@ -51,7 +51,7 @@ os.makedirs(FRAME_FOLDER, exist_ok=True)
 os.makedirs(DETECTION_FOLDER, exist_ok=True)
 
 # ── YOLO 모델 로드 ───────────────────────────────────────
-MODEL_PATH = 'waterdeer.pt'
+MODEL_PATH = '/home/mini/CCTV_Timeline_v2/all_yolo11x_imgsz640_orgin.pt'
 model = YOLO(MODEL_PATH)
 
 # ── 데이터베이스 설정 ─────────────────────────────────────
@@ -596,8 +596,5 @@ def my_uploads():
     return render_template('my_uploads.html', uploads=uploads)
 
 
-
-
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=2312, debug=False)
+    app.run(host="0.0.0.0", port=2311, debug=False)

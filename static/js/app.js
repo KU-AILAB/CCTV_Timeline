@@ -53,16 +53,16 @@ document.getElementById('uploadForm').addEventListener('submit', handleUpload);
 async function loadServerVideos() {
   const res = await fetch('/api/videos', { credentials: 'same-origin' });
   const videos = await res.json();
-  const container = document.getElementById('serverVideos');
-  container.innerHTML = '';
+  const tbody = document.getElementById('serverVideos');
+  tbody.innerHTML = '';
   videos.forEach(v => {
-    const item = document.createElement('div');
-    item.className = 'video-item';
-    item.textContent = v.filename;
-    item.addEventListener('click', () => selectServerVideo(v.filename));
-    container.appendChild(item);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="ps-3">${v.filename}</td>`;
+    tr.addEventListener('click', () => selectServerVideo(v.filename));
+    tbody.appendChild(tr);
   });
 }
+  
 
 // 서버 영상 선택
 function selectServerVideo(filename) {
