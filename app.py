@@ -39,7 +39,7 @@ os.makedirs(FRAME_FOLDER,  exist_ok=True)
 os.makedirs(DETECT_FOLDER, exist_ok=True)
 
 # ── YOLO 모델 로드 ───────────────────────────────────────────
-model = YOLO('/home/mini/CCTV_Timeline_v2/all_yolo11x_imgsz640_orgin.pt')
+model = YOLO('/home/sjy/cctvtest3/CCTV_Timeline_v2/waterdeer.pt')
 
 # ── DB 및 로그인 ────────────────────────────────────────────
 app.config['SQLALCHEMY_DATABASE_URI'] = (
@@ -364,13 +364,23 @@ def upload_chunk():
     sess.uploaded_size = os.path.getsize(part_path)
     pct = sess.uploaded_size / sess.total_size * 100
 
+    # 세션 사용자 진행도 업데이트
     if sess.user:
         sess.user.progress = pct
-    video = Video.query.filter_by(user_id=sess.user_id, filename=sess.filename).first()
+
+    # Video 레코드 조회: 같은 파일명 중 가장 최근 생성된 레코드를 선택하도록 수정
+    video = (
+        Video.query
+             .filter_by(user_id=sess.user_id, filename=sess.filename)
+             .order_by(Video.created_at.desc())
+             .first()
+    )
     if video:
         video.progress = pct
+
     db.session.commit()
 
+    # 업로드 완료 시 파일 이동 및 추가 처리
     if sess.uploaded_size >= sess.total_size:
         final_path = os.path.join(UPLOAD_FOLDER, sess.filename)
         os.replace(part_path, final_path)
@@ -382,11 +392,13 @@ def upload_chunk():
                 video.filename = os.path.basename(mp4_path)
                 db.session.commit()
 
+        # 최종 100%로 설정
         if sess.user:
             sess.user.progress = 100.0
         if video:
             video.progress = 100.0
 
+        # 세션 삭제
         db.session.delete(sess)
         db.session.commit()
 
@@ -394,6 +406,7 @@ def upload_chunk():
         'uploaded_size': sess.uploaded_size,
         'progress': pct
     })
+
 
 # ── 프레임 추출 & 검출 ───────────────────────────────────
 @app.route('/extract_frames', methods=['POST'])
@@ -502,6 +515,13 @@ def my_uploads():
     uploads = Video.query.filter_by(user_id=current_user.id)\
                         .order_by(Video.created_at.desc()).all()
     return render_template('my_uploads.html', uploads=uploads)
-
+@app.route('/api/my_uploads_progress')
+@login_required
+def api_my_uploads_progress():
+    videos = Video.query.filter_by(user_id=current_user.id).all()
+    return jsonify([
+        {'id': v.id, 'progress': v.progress}
+        for v in videos
+    ])
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=2311, debug=True)
+    app.run(host="0.0.0.0", port=2312, debug=True)

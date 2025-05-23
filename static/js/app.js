@@ -226,7 +226,7 @@ function buildTimelines(detected, duration) {
   // 연속 구간 계산
   let start = secs[0], prev = secs[0], segs = [];
   secs.slice(1).forEach(s => {
-    if (s - prev <= 1) prev = s;
+    if (s - prev <= 6) prev = s;
     else { segs.push([start, prev + 1]); start = prev = s; }
   });
   segs.push([start, prev + 1]);
