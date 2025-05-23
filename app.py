@@ -212,7 +212,7 @@ def split_video_segment(input_path: str,
 
 
 
-def group_contiguous_ranges(times):
+def group_contiguous_ranges(times, max_gap=5):
     """
     >>> group_contiguous_ranges([0,1,2,10,11])  →  [(0,2), (10,11)]
     """
@@ -222,7 +222,7 @@ def group_contiguous_ranges(times):
     ranges = []
     start = prev = times[0]
     for t in times[1:]:
-        if t == prev + 1:          # 바로 다음 초면 같은 구간
+        if t - prev <= max_gap + 1:
             prev = t
         else:                      # 끊겼으면 구간 종료
             ranges.append((start, prev))

@@ -360,7 +360,7 @@ function buildTimelines(detectedTimes, duration) {
   if (secs.length) {
     let start = secs[0], prev = secs[0];
     for (let s of secs.slice(1)) {
-      if (s - prev <= 1) prev = s;
+      if (s - prev <= 6) prev = s;
       else { segs.push([start, prev+1]); start = prev = s; }
     }
     segs.push([start, prev+1]);
