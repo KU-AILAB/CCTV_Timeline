@@ -2,6 +2,11 @@
 
 let currentVideoFile = '';
 
+function hms2sec(hms) {
+  const [h, m, s] = hms.split(':').map(Number);
+  return h * 3600 + m * 60 + Number(s);
+}
+
 // .sec → .mp4 매핑
 function getPlayableFilename(filename) {
   const ext = filename.split('.').pop().toLowerCase();
@@ -55,27 +60,29 @@ function selectServerVideo(filename) {
 // 프레임 추출 및 탐지 호출
 async function extractAndDetect(filename) {
   const startTime = document.getElementById('startTime').value || '00:00:00';
+  const offsetSec = hms2sec(startTime);
+
   const res = await fetch('/extract_frames', {
     method: 'POST',
     credentials: 'same-origin',
     body: new URLSearchParams({ video_file: filename, start_time: startTime })
   });
   const data = await res.json();
+
   const player = document.getElementById('videoPlayer');
+  player.addEventListener('loadedmetadata', () => {
+    player.currentTime = offsetSec;          // ← 지정 지점으로 점프
+  }, { once: true });
 
   function renderAll() {
     player.removeEventListener('loadedmetadata', renderAll);
-    player.removeEventListener('canplaythrough', renderAll);
     displayFramesInTimeline(data.frames, data.frame_times, data.detected_times);
     displayDetectionResults(data.csv, data.json, data.detected_times);
-    //buildTimelines(data.detected_times, player.duration);
+    buildTimelines(data.detected_times, player.duration);
   }
-
   player.addEventListener('loadedmetadata', renderAll, { once: true });
-  player.addEventListener('canplaythrough', renderAll, { once: true });
 
-  const playFile = getPlayableFilename(filename);
-  player.src = `/static/uploads/${encodeURIComponent(playFile)}`;
+  player.src = `/static/uploads/${encodeURIComponent(getPlayableFilename(filename))}`;
   player.load();
 
   setTimeout(() => {
@@ -165,9 +172,21 @@ function updateProgressBar(percent) {
 }
 
 // 업로드 완료 후 자동 프레임 추출
-async function onUploadComplete(filename) {
-  currentVideoFile = filename;
+/* ─────────────────────────────
+ * HH:MM:SS → 초
+ * ───────────────────────────── */
+function hms2sec(hms) {
+  const [h, m, s] = hms.split(':').map(Number);
+  return h * 3600 + m * 60 + Number(s);
+}
+
+/* ─────────────────────────────
+ * 서버 영상 선택 → 추출 호출
+ * ───────────────────────────── */
+async function extractAndDetect(filename) {
   const startTime = document.getElementById('startTime').value || '00:00:00';
+  const offsetSec = hms2sec(startTime);
+
   const res = await fetch('/extract_frames', {
     method: 'POST',
     credentials: 'same-origin',
@@ -176,15 +195,47 @@ async function onUploadComplete(filename) {
   const data = await res.json();
 
   const player = document.getElementById('videoPlayer');
-  const playFile = getPlayableFilename(filename);
-  setVideoSource(`/static/uploads/${encodeURIComponent(playFile)}`);
+  player.addEventListener('loadedmetadata', () => {
+    player.currentTime = offsetSec;          // ← 지정 지점으로 점프
+  }, { once: true });
+
+  function renderAll() {
+    player.removeEventListener('loadedmetadata', renderAll);
+    displayFramesInTimeline(data.frames, data.frame_times, data.detected_times);
+    displayDetectionResults(data.csv, data.json, data.detected_times);
+    buildTimelines(data.detected_times, player.duration);
+  }
+  player.addEventListener('loadedmetadata', renderAll, { once: true });
+
+  player.src = `/static/uploads/${encodeURIComponent(getPlayableFilename(filename))}`;
+  player.load();
+}
+
+/* ─────────────────────────────
+ * 업로드 완료 → 추출 호출
+ * ───────────────────────────── */
+async function onUploadComplete(filename) {
+  currentVideoFile = filename;
+  const startTime = document.getElementById('startTime').value || '00:00:00';
+  const offsetSec = hms2sec(startTime);
+
+  const res = await fetch('/extract_frames', {
+    method: 'POST',
+    credentials: 'same-origin',
+    body: new URLSearchParams({ video_file: filename, start_time: startTime })
+  });
+  const data = await res.json();
+
+  const player = document.getElementById('videoPlayer');
+  player.addEventListener('loadedmetadata', () => {
+    player.currentTime = offsetSec;          // ← 시작 지점 점프
+    buildTimelines(data.detected_times, player.duration);
+  }, { once: true });
+
+  setVideoSource(`/static/uploads/${encodeURIComponent(getPlayableFilename(filename))}`);
 
   displayFramesInTimeline(data.frames, data.frame_times, data.detected_times);
   displayDetectionResults(data.csv, data.json, data.detected_times);
-  videoPlayer.addEventListener('loadedmetadata', () => {
-  buildTimelines(data.detected_times, videoPlayer.duration);
-  }, { once: true });
-  //buildTimelines(data.detected_times, player.duration);
 }
 
 // 비디오 소스 설정

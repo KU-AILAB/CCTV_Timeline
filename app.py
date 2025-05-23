@@ -215,12 +215,12 @@ def extract_frames(video_path, output_folder, offset_sec=0):
     return saved, times, fps
 
 # ── 동물 탐지 및 결과 파싱 ─────────────────────────────────
-def detect_animals(frames_folder, fps, video_name):
+def detect_animals(frames_folder, fps, video_name, offset_sec=0):
     """
-    각 프레임을 YOLO로 돌려서 동물이 탐지된 초(정수)를 수집한 뒤,
-    연속 구간을 묶어 'HH:MM:SS-HH:MM:SS' 형식으로 CSV/JSON 저장.
+    프레임 폴더를 돌면서 탐지된 '로컬 시간(시작=0)'을
+    HH:MM:SS-HH:MM:SS 범위로 묶어 CSV/JSON 저장
     """
-    buckets = defaultdict(set)           # {animal: {초, 초, …}}
+    buckets = defaultdict(set)          # {animal: {0,1,2,…}}
 
     files = sorted(
         os.listdir(frames_folder),
@@ -229,17 +229,17 @@ def detect_animals(frames_folder, fps, video_name):
 
     for fname in files:
         idx = int(fname.split('_')[1].split('.')[0])
-        t   = idx / fps                  # 실수(초) → int로 변환해 통일
+        t   = idx / fps - offset_sec    # ← 전체 시각 – 오프셋 = 로컬 s
+        if t < 0:
+            continue                    # 이론상 없지만 안전
         frame = cv2.imread(os.path.join(frames_folder, fname))
         if frame is None:
             continue
-
         dets = model(frame)[0].boxes.data.cpu().numpy()
         for *_, conf, cid in dets:
-            if conf > 0.7:
+            if conf > 0.4:
                 buckets[model.names[int(cid)]].add(int(t))
 
-    # ── 초 단위를 연속 구간으로 묶어 DataFrame 생성 ───────────
     merged = []
     for animal, times in buckets.items():
         for s, e in group_contiguous_ranges(sorted(times)):
@@ -250,14 +250,14 @@ def detect_animals(frames_folder, fps, video_name):
 
     df = pd.DataFrame(merged)
 
-    csv_p  = os.path.join(DETECTION_FOLDER, f"{video_name}_results.csv")
-    json_p = os.path.join(DETECTION_FOLDER, f"{video_name}_results.json")
+    csv_path  = os.path.join(DETECTION_FOLDER, f"{video_name}_results.csv")
+    json_path = os.path.join(DETECTION_FOLDER, f"{video_name}_results.json")
 
-    df.to_csv(csv_p, index=False, encoding='utf-8')
-    with open(json_p, 'w', encoding='utf-8') as f:
+    df.to_csv(csv_path, index=False, encoding='utf-8')
+    with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(merged, f, ensure_ascii=False, indent=2)
 
-    return csv_p, json_p
+    return csv_path, json_path
 
 def get_detected_times_from_csv(csv_path):
     """
@@ -408,51 +408,54 @@ def extract_video_frames():
     video_file = request.form.get('video_file')
     start_time = request.form.get('start_time', '00:00:00')
     if not video_file:
-        return jsonify({'error':'No video file'}), 400
+        return jsonify({'error': 'No video file'}), 400
 
     offset = convert_time_to_seconds(start_time)
-    path   = os.path.join(UPLOAD_FOLDER, video_file)
-    name   = os.path.splitext(video_file)[0]
-    out_dir= os.path.join(FRAME_FOLDER, name)
+    src_path = os.path.join(UPLOAD_FOLDER, video_file)
 
-    current_user.progress = 30
-    db.session.commit()
+    # .sec 업로드라면 mp4 변환본 사용 (생략 가능: 앞서 구현돼 있으면)
+    if video_file.lower().endswith('.sec'):
+        mp4_name = os.path.splitext(video_file)[0] + '.mp4'
+        mp4_path = os.path.join(UPLOAD_FOLDER, mp4_name)
+        if not os.path.exists(mp4_path):
+            convert_sec_to_mp4_ffmpeg(src_path, mp4_path)
+        src_path   = mp4_path
+        video_file = mp4_name
 
-    frames, frame_times, fps = extract_frames(path, out_dir, offset)
-    current_user.progress = 60
-    db.session.commit()
+    name    = os.path.splitext(video_file)[0]
+    out_dir = os.path.join(FRAME_FOLDER, name)
 
-    try:
-        csv_p, json_p = detect_animals(out_dir, fps, name)
-    except Exception as e:
-        logging.error(f"detect_animals 실패: {e}")
-        return jsonify({'error':'Detection failed'}), 500
+    current_user.progress = 30; db.session.commit()
 
-    times = get_detected_times_from_csv(csv_p)
-    ranges = group_contiguous_ranges(times)
+    # 프레임/타임스탬프 추출 (frame_times는 오프셋 포함 → 곧 보정)
+    frames, frame_times, fps = extract_frames(src_path, out_dir, offset)
+    frame_times = [t - offset for t in frame_times]   # ← 0 기준 보정
+
+    current_user.progress = 60; db.session.commit()
+
+    csv_p, json_p = detect_animals(out_dir, fps, name, offset)
+
+    times = get_detected_times_from_csv(csv_p)        # 이미 로컬 s 리스트
+
+    # 세그먼트 파일 생성 (split은 원본 기준 절대 s 필요)
     segments = []
-    for s, e in ranges:
-        start_hms = format_seconds_to_hms(offset + s)
-        end_hms   = format_seconds_to_hms(offset + e)
-        seg_name  = f"{name}_{start_hms}_{end_hms}.mp4"
-        dest      = os.path.join(DETECTION_FOLDER, seg_name)
-        split_video_segment(path, dest, offset + s, offset + e)
+    for s, e in group_contiguous_ranges(times):
+        abs_s = offset + s
+        abs_e = offset + e
+        seg_name = f"{name}_{format_seconds_to_hms(abs_s)}_{format_seconds_to_hms(abs_e)}.mp4"
+        dest = os.path.join(DETECTION_FOLDER, seg_name)
+        split_video_segment(src_path, dest, abs_s, abs_e)
         segments.append(seg_name)
 
-    current_user.progress = 100
-    db.session.commit()
-
-    csv_url  = url_for('static', filename=f'detections/{os.path.basename(csv_p)}')
-    json_url = url_for('static', filename=f'detections/{os.path.basename(json_p)}')
+    current_user.progress = 100; db.session.commit()
 
     return jsonify({
         'frames': frames,
-        'frame_times': frame_times,
+        'frame_times': frame_times,      # 0부터 시작
         'detected_times': times,
-        'csv': csv_url,
-        'json': json_url,
-        'segments': segments,
-        'segment_folder': DETECTION_FOLDER
+        'csv':  url_for('static', filename=f'detections/{os.path.basename(csv_p)}'),
+        'json': url_for('static', filename=f'detections/{os.path.basename(json_p)}'),
+        'segments': segments
     })
 
 # ── 클립 다운로드 ─────────────────────────────────────────
