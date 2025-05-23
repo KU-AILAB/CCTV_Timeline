@@ -32,11 +32,12 @@
           <td>
             <div class="progress-cell">
               <div class="progress-bar">
-                <div class="progress-fill" style="width: {{ v.progress }}%;"></div>
+                <div class="progress-fill" style="width: {{ (v.progress * 100)|round(2) }}%;"></div>
               </div>
-              <span class="progress-text">{{ "%.2f"|format(v.progress) }}%</span>
+              <span class="progress-text">{{ (v.progress * 100)|round(2) }}%</span>
             </div>
           </td>
+          
           <td>{{ v.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
         </tr>
         {% endfor %}

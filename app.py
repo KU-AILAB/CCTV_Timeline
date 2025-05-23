@@ -386,19 +386,29 @@ def index():
 @app.route('/api/videos')
 @login_required
 def get_server_videos():
+    # DB에 저장된 파일명
     db_files = {v.filename for v in Video.query.filter_by(user_id=current_user.id)}
-    fs = {f for f in os.listdir(UPLOAD_FOLDER) if os.path.isfile(os.path.join(UPLOAD_FOLDER,f)) and allowed_file(f)}
-    filtered = set()
-    for f in fs:
-        base, ext = os.path.splitext(f.lower())
-        if ext == '.sec' and os.path.exists(os.path.join(UPLOAD_FOLDER, base + '.mp4')):
-            continue
-        filtered.add(f)
-    all_set = db_files | filtered
-    existing = [f for f in all_set if os.path.exists(os.path.join(UPLOAD_FOLDER,f))]
-    missing  = sorted(all_set - set(existing))
-    existing_sorted = sorted(existing, key=lambda fn: os.path.getmtime(os.path.join(UPLOAD_FOLDER,fn)), reverse=True)
-    return jsonify([{'filename':fn} for fn in existing_sorted + missing])
+    # 실제 업로드 폴더 경로
+    BASE_DIR      = os.path.dirname(os.path.abspath(__file__))
+    UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+
+    # UPLOAD_FOLDER 내부의 실제 파일만 조회
+    fs = {
+        f for f in os.listdir(UPLOAD_FOLDER)
+        if os.path.isfile(os.path.join(UPLOAD_FOLDER, f)) and allowed_file(f)
+    }
+
+    # (필요 시) 변환본(.sec→.mp4) 필터링 등
+    filtered = fs  # 기존 로직에 맞춰 fs 대신 필터링된 셋 사용
+
+    # DB 기록과 실제 파일의 교집합만 취함 → missing 제외
+    existing = sorted(
+        (db_files & filtered),
+        key=lambda fn: os.path.getmtime(os.path.join(UPLOAD_FOLDER, fn)),
+        reverse=True
+    )
+
+    return jsonify([{'filename': fn} for fn in existing])
 
 # ── 업로드 초기화 API ───────────────────────────────────────
 @app.route('/upload/init', methods=['POST'])
@@ -576,8 +586,15 @@ def download_clip():
 @app.route('/my_uploads')
 @login_required
 def my_uploads():
-    uploads = Video.query.filter_by(user_id=current_user.id).all()
+    # 사용자 업로드를 생성일자 최신순(desc)으로 가져옵니다.
+    uploads = (
+        Video.query
+        .filter_by(user_id=current_user.id)
+        .order_by(Video.created_at.desc())
+        .all()
+    )
     return render_template('my_uploads.html', uploads=uploads)
+
 
 
 
