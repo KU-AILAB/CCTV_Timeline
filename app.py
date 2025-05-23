@@ -51,7 +51,7 @@ os.makedirs(FRAME_FOLDER, exist_ok=True)
 os.makedirs(DETECTION_FOLDER, exist_ok=True)
 
 # ── YOLO 모델 로드 ───────────────────────────────────────
-MODEL_PATH = 'all_yolo11x_imgsz640_orgin.pt'
+MODEL_PATH = 'waterdeer.pt'
 model = YOLO(MODEL_PATH)
 
 # ── 데이터베이스 설정 ─────────────────────────────────────
@@ -155,15 +155,62 @@ def convert_sec_to_mp4_ffmpeg(sec_path, mp4_path):
 
 
 
-def split_video_segment(input_path, output_path, start_sec, end_sec):
-    if end_sec <= start_sec:
-        logging.warning(f"skip segment: {start_sec} ≥ {end_sec}")
-        return
-    cmd = ['ffmpeg','-y','-i',input_path,'-ss',str(start_sec),'-to',str(end_sec),'-c','copy',output_path]
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        logging.error(f"ffmpeg split failed ({start_sec}~{end_sec}): {e}")
+import os
+import subprocess
+
+def split_video_segment(input_path: str,
+                        output_path: str,
+                        start_sec: float,
+                        end_sec: float | None):
+    """
+    input_path에서 start_sec부터 end_sec(또는 영상 종료 시점)까지 잘라
+    output_path에 저장하는 함수입니다.
+    mp4는 key-frame 복사 모드로, 그 외 포맷은 재인코딩 방식으로 처리합니다.
+    """
+    # 출력용 임시 파일 경로 생성
+    root, ext = os.path.splitext(output_path)
+    tmp_out = root + '_tmp' + ext
+
+    # 자를 구간 길이 계산
+    duration = (end_sec - start_sec) if end_sec is not None else None
+
+    if input_path.lower().endswith('.mp4'):
+        # ── key-frame 안전 복사 (빠른 seek) ─────────────────────────
+        cmd = [
+            'ffmpeg', '-y',
+            '-ss', f'{start_sec:.3f}',
+            '-i', input_path
+        ]
+        if duration is not None:
+            cmd += ['-t', f'{duration:.3f}']
+        cmd += [
+            '-c', 'copy',
+            '-movflags', '+faststart',
+            tmp_out
+        ]
+    else:
+        # ── 재인코딩 모드 ────────────────────────────────────────────
+        cmd = [
+            'ffmpeg', '-y',
+            '-ss', f'{start_sec:.3f}',
+            '-i', input_path
+        ]
+        if duration is not None:
+            cmd += ['-t', f'{duration:.3f}']
+        cmd += [
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+            '-c:a', 'aac',     '-b:a', '128k',
+            '-movflags', '+faststart',
+            tmp_out
+        ]
+
+    # ffmpeg 실행
+    subprocess.run(cmd, check=True)
+
+    # 임시 파일을 최종 파일로 교체
+    os.replace(tmp_out, output_path)
+
+
 
 def group_contiguous_ranges(times):
     """
@@ -237,7 +284,7 @@ def detect_animals(frames_folder, fps, video_name, offset_sec=0):
             continue
         dets = model(frame)[0].boxes.data.cpu().numpy()
         for *_, conf, cid in dets:
-            if conf > 0.4:
+            if conf > 0.2:
                 buckets[model.names[int(cid)]].add(int(t))
 
     merged = []
@@ -375,31 +422,66 @@ def upload_init():
     })
 
 # ── 청크 업로드 API ───────────────────────────────────────
+# ── 청크 업로드 API ─────────────────────────────────────────
 @app.route('/upload/chunk', methods=['POST'])
 def upload_chunk():
     sess = UploadSession.query.get(request.form['session_id'])
     if not sess:
-        return jsonify({'error':'invalid session'}), 400
+        return jsonify({'error': 'invalid session'}), 400
+
     offset = int(request.form.get('offset', 0))
-    part_path = os.path.join(UPLOAD_FOLDER, f"{sess.id}_{sess.filename}.part")
+    part_path = os.path.join(
+        UPLOAD_FOLDER, f"{sess.id}_{sess.filename}.part"
+    )
     os.makedirs(os.path.dirname(part_path), exist_ok=True)
+
     mode = 'r+b' if os.path.exists(part_path) else 'wb'
     with open(part_path, mode) as f:
         f.seek(offset)
         f.write(request.files['chunk'].read())
+
+    # ── 진행률 계산 ────────────────────────────────────────
     sess.uploaded_size = os.path.getsize(part_path)
     percent = sess.uploaded_size / sess.total_size * 100
+
+    # User.progress (기존) -------------------------------------------------
     if sess.user:
         sess.user.progress = percent
+
+    # Video.progress (신규) -----------------------------------------------
+    if sess.user_id:
+        video = Video.query.filter_by(
+            user_id=sess.user_id, filename=sess.filename
+        ).first()
+        if video:
+            video.progress = percent
+
     db.session.commit()
+
+    # ── 업로드 완료 처리 ────────────────────────────────────
     if sess.uploaded_size >= sess.total_size:
-        final = os.path.join(UPLOAD_FOLDER, sess.filename)
-        os.replace(part_path, final)
+        final_path = os.path.join(UPLOAD_FOLDER, sess.filename)
+        os.replace(part_path, final_path)
+
+        # 변환 작업 (종전 로직 유지)
         if sess.filename.lower().endswith('.avi'):
-            convert_avi_to_mp4_ffmpeg(final, final.rsplit('.',1)[0] + '.mp4')
+            convert_avi_to_mp4_ffmpeg(final_path, final_path.rsplit('.', 1)[0] + '.mp4')
         if sess.filename.lower().endswith('.sec'):
-            convert_sec_to_mp4_ffmpeg(final, final.rsplit('.',1)[0] + '.mp4')
+            convert_sec_to_mp4_ffmpeg(final_path, final_path.rsplit('.', 1)[0] + '.mp4')
+
+        # 100 % 로 마무리
+        if sess.user:
+            sess.user.progress = 100.0
+        if sess.user_id and video:
+            video.progress = 100.0
+
+        # 세션 레코드 정리(선택) — 필요 없으면 주석 처리
+        db.session.delete(sess)
+
+        db.session.commit()
+
     return jsonify({'uploaded_size': sess.uploaded_size, 'progress': percent})
+
 
 # ── 프레임 추출 및 탐지 API ─────────────────────────────────
 @app.route('/extract_frames', methods=['POST'])
@@ -464,21 +546,31 @@ def download_clip():
     vf    = request.args.get('video_file')
     start = float(request.args.get('start', 0))
     end   = float(request.args.get('end', 0))
+
     if not vf:
-        return jsonify({'error':'video_file 누락'}), 400
-    path = os.path.join(UPLOAD_FOLDER, vf)
-    if not os.path.exists(path):
-        return jsonify({'error':'파일 없음'}), 404
-    tmp = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
-    tmp.close()
-    split_video_segment(path, tmp.name, start, end)
-    base    = os.path.splitext(vf)[0]
+        return jsonify({'error': 'video_file 누락'}), 400
+
+    # ⬇️ .sec/.avi → .mp4 매핑
+    base, ext = os.path.splitext(vf)
+    if ext.lower() in {'.sec', '.avi'}:
+        alt = base + '.mp4'
+        if os.path.exists(os.path.join(UPLOAD_FOLDER, alt)):
+            vf = alt   # 변환본 사용
+
+    src = os.path.join(UPLOAD_FOLDER, vf)
+    if not os.path.exists(src):
+        return jsonify({'error': '파일 없음'}), 404
+
+    tmp = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False); tmp.close()
+    split_video_segment(src, tmp.name, start, end)
+
     dl_name = f"{base}_{start:.2f}-{end:.2f}.mp4"
-    resp    = send_file(tmp.name, as_attachment=True, download_name=dl_name)
+    resp = send_file(tmp.name, as_attachment=True, download_name=dl_name)
+
     @resp.call_on_close
-    def _cleanup():
-        os.remove(tmp.name)
+    def _cleanup(): os.remove(tmp.name)
     return resp
+
 
 # ── 내 업로드 목록 페이지 ────────────────────────────────────
 @app.route('/my_uploads')

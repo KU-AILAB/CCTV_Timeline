@@ -10,7 +10,14 @@ function hms2sec(hms) {
 // .sec → .mp4 매핑
 function getPlayableFilename(filename) {
   const ext = filename.split('.').pop().toLowerCase();
-  return ext === 'sec' ? filename.replace(/\.sec$/i, '.mp4') : filename;
+
+  // .sec/.avi → .mp4 컨테이너로 매핑
+  if (ext === 'sec' || ext === 'avi') {
+    return filename.replace(/\.(sec|avi)$/i, '.mp4');
+  }
+
+  // 그 외 포맷은 그대로 반환
+  return filename;
 }
 
 // 페이지 로드 시 이어 업로드 체크
@@ -302,30 +309,35 @@ function displayDetectionResults(csvPath, jsonPath, detectedTimes) {
 function buildTimelines(detectedTimes, duration) {
   const tl = document.getElementById('timelines');
   tl.innerHTML = '';
-  const secs = Array.from(new Set(detectedTimes.map(t => Math.floor(t)))).sort((a,b)=>a-b);
-  const segments = [];
+
+  const secs = Array.from(new Set(detectedTimes.map(t => Math.floor(t))))
+                    .sort((a,b)=>a-b);
+
+  // 연속 구간 묶기
+  const segs = [];
   if (secs.length) {
     let start = secs[0], prev = secs[0];
     for (let s of secs.slice(1)) {
-      if (s - prev <= 1) {
-        prev = s;
-      } else {
-        segments.push([start, prev+1]);
-        start = prev = s;
-      }
+      if (s - prev <= 1) prev = s;
+      else { segs.push([start, prev+1]); start = prev = s; }
     }
-    segments.push([start, prev+1]);
+    segs.push([start, prev+1]);
   }
-  segments.forEach(([s,e]) => {
+
+  segs.forEach(([s,e]) => {
     const bar = document.createElement('div');
     bar.className = 'segment-detected';
     bar.style.left  = (s/duration*100)+'%';
     bar.style.width = ((e-s)/duration*100)+'%';
     bar.title = `${secondsToHMS(s)}~${secondsToHMS(e)}`;
+
     bar.addEventListener('click', () => {
-      const vf = encodeURIComponent(currentVideoFile);
-      location.href = `/download_clip?video_file=${vf}&start=${s.toFixed(2)}&end=${e.toFixed(2)}`;
+      /* ⬇️ .sec/.avi → .mp4 로 매핑 */
+      const vf = encodeURIComponent(getPlayableFilename(currentVideoFile));
+      location.href =
+        `/download_clip?video_file=${vf}&start=${s.toFixed(2)}&end=${e.toFixed(2)}`;
     });
     tl.appendChild(bar);
   });
 }
+
