@@ -22,6 +22,7 @@ function getPlayableFilename(filename) {
 
 // 페이지 로드 시 이어 업로드 체크
 window.addEventListener('DOMContentLoaded', () => {
+  // 이어 업로드 재개 체크
   const pending = JSON.parse(localStorage.getItem('pendingUpload'));
   if (pending) {
     const percent = Math.round(pending.uploadedSize / pending.totalSize * 100);
@@ -36,7 +37,13 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }, { once: true });
   }
+
+  // 서버 영상 목록 불러오기
   loadServerVideos();
+
+  // 검출 없이 영상만 업로드 버튼 핸들러 등록
+  document.getElementById('uploadOnlyBtn')
+    .addEventListener('click', uploadOnly);
 });
 
 // 업로드 폼 제출
@@ -63,6 +70,41 @@ function selectServerVideo(filename) {
   document.getElementById('startTime').value = '00:00:00';
   extractAndDetect(filename);
 }
+
+async function uploadOnly(event) {
+  const file = document.getElementById('videoFile').files[0];
+  if (!file) return alert('파일을 선택하세요');
+
+  try {
+    // 업로드 세션 초기화
+    const initRes = await fetch('/upload/init', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, total_size: file.size })
+    });
+    const initData = await initRes.json();
+
+    // 로컬에 진행 상태 저장
+    localStorage.setItem('pendingUpload', JSON.stringify({
+      sessionId: initData.session_id,
+      filename: file.name,
+      totalSize: file.size,
+      uploadedSize: initData.uploaded_size
+    }));
+
+    // 청크 업로드 수행
+    await uploadChunks(file, initData.session_id, initData.uploaded_size);
+    localStorage.removeItem('pendingUpload');
+
+    alert('영상 업로드가 완료되었습니다.');
+    loadServerVideos();  // 서버 목록 갱신
+  } catch (err) {
+    console.error('영상 업로드 중 오류:', err);
+    alert('업로드 중 오류가 발생했습니다.');
+  }
+}
+
 
 // 프레임 추출 및 탐지 호출
 async function extractAndDetect(filename) {
