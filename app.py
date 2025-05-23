@@ -27,6 +27,7 @@ from werkzeug.security import (
     generate_password_hash,
     check_password_hash
 )
+from collections import defaultdict
 
 # ── 로깅 설정 ───────────────────────────────────────────────
 logging.basicConfig(
@@ -164,19 +165,24 @@ def split_video_segment(input_path, output_path, start_sec, end_sec):
     except subprocess.CalledProcessError as e:
         logging.error(f"ffmpeg split failed ({start_sec}~{end_sec}): {e}")
 
-def group_contiguous_ranges(times, max_gap=1):
+def group_contiguous_ranges(times):
+    """
+    >>> group_contiguous_ranges([0,1,2,10,11])  →  [(0,2), (10,11)]
+    """
     if not times:
         return []
+
     ranges = []
     start = prev = times[0]
     for t in times[1:]:
-        if t - prev <= max_gap:
+        if t == prev + 1:          # 바로 다음 초면 같은 구간
             prev = t
-        else:
+        else:                      # 끊겼으면 구간 종료
             ranges.append((start, prev))
             start = prev = t
     ranges.append((start, prev))
     return ranges
+
 
 def extract_frames(video_path, output_folder, offset_sec=0):
     if os.path.exists(output_folder):
@@ -210,42 +216,75 @@ def extract_frames(video_path, output_folder, offset_sec=0):
 
 # ── 동물 탐지 및 결과 파싱 ─────────────────────────────────
 def detect_animals(frames_folder, fps, video_name):
-    results = []
-    files = sorted(os.listdir(frames_folder), key=lambda x: int(x.split('_')[1].split('.')[0]))
+    """
+    각 프레임을 YOLO로 돌려서 동물이 탐지된 초(정수)를 수집한 뒤,
+    연속 구간을 묶어 'HH:MM:SS-HH:MM:SS' 형식으로 CSV/JSON 저장.
+    """
+    buckets = defaultdict(set)           # {animal: {초, 초, …}}
+
+    files = sorted(
+        os.listdir(frames_folder),
+        key=lambda x: int(x.split('_')[1].split('.')[0])
+    )
+
     for fname in files:
         idx = int(fname.split('_')[1].split('.')[0])
-        t = idx / fps
+        t   = idx / fps                  # 실수(초) → int로 변환해 통일
         frame = cv2.imread(os.path.join(frames_folder, fname))
         if frame is None:
             continue
-        dets = model(frame)[0].boxes.data.cpu().numpy()
-        for x1, y1, x2, y2, conf, cid in dets:
-            if conf > 0.7:
-                results.append({
-                    'time': str(timedelta(seconds=t)),
-                    'animal': model.names[int(cid)]
-                })
 
-    df = pd.DataFrame(results, columns=['time','animal'])
+        dets = model(frame)[0].boxes.data.cpu().numpy()
+        for *_, conf, cid in dets:
+            if conf > 0.7:
+                buckets[model.names[int(cid)]].add(int(t))
+
+    # ── 초 단위를 연속 구간으로 묶어 DataFrame 생성 ───────────
+    merged = []
+    for animal, times in buckets.items():
+        for s, e in group_contiguous_ranges(sorted(times)):
+            merged.append({
+                'time'  : f"{format_seconds_to_hms(s)}-{format_seconds_to_hms(e)}",
+                'animal': animal
+            })
+
+    df = pd.DataFrame(merged)
+
     csv_p  = os.path.join(DETECTION_FOLDER, f"{video_name}_results.csv")
     json_p = os.path.join(DETECTION_FOLDER, f"{video_name}_results.json")
+
     df.to_csv(csv_p, index=False, encoding='utf-8')
-    with open(json_p,'w',encoding='utf-8') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    with open(json_p, 'w', encoding='utf-8') as f:
+        json.dump(merged, f, ensure_ascii=False, indent=2)
+
     return csv_p, json_p
 
 def get_detected_times_from_csv(csv_path):
+    """
+    CSV의 'time' 컬럼에서
+      - 단일 시각  → 해당 초 1개
+      - 범위 'a-b' → a ~ b 구간 전체
+    를 수집해 정렬된 리스트로 반환
+    """
     if not os.path.exists(csv_path):
-        logging.warning(f"No such CSV: {csv_path}")
         return []
+
     df = pd.read_csv(csv_path)
-    if df.empty:
-        logging.info(f"No detections in CSV: {csv_path}")
+    if "time" not in df.columns:
         return []
-    def to_seconds(tstr):
-        h, m, s = tstr.split(':')
-        return int(h)*3600 + int(m)*60 + float(s)
-    return sorted(to_seconds(ts) for ts in df['time'])
+
+    seconds = set()
+    for t in df["time"]:
+        t = str(t).strip()
+        if '-' in t:                                   # 범위형
+            start_str, end_str = [x.strip() for x in t.split('-', 1)]
+            s = convert_time_to_seconds(start_str)
+            e = convert_time_to_seconds(end_str)
+            seconds.update(range(int(s), int(e) + 1))  # 끝 초 포함
+        else:                                          # 단일 시각
+            seconds.add(int(convert_time_to_seconds(t)))
+
+    return sorted(seconds)
 
 # ── 서비스 워커 제공 ───────────────────────────────────────
 @app.route('/sw.js')
@@ -449,4 +488,4 @@ def my_uploads():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=2311, debug=False)
+    app.run(host="0.0.0.0", port=2312, debug=False)

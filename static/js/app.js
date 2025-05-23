@@ -68,7 +68,7 @@ async function extractAndDetect(filename) {
     player.removeEventListener('canplaythrough', renderAll);
     displayFramesInTimeline(data.frames, data.frame_times, data.detected_times);
     displayDetectionResults(data.csv, data.json, data.detected_times);
-    buildTimelines(data.detected_times, player.duration);
+    //buildTimelines(data.detected_times, player.duration);
   }
 
   player.addEventListener('loadedmetadata', renderAll, { once: true });
@@ -181,7 +181,10 @@ async function onUploadComplete(filename) {
 
   displayFramesInTimeline(data.frames, data.frame_times, data.detected_times);
   displayDetectionResults(data.csv, data.json, data.detected_times);
-  buildTimelines(data.detected_times, player.duration);
+  videoPlayer.addEventListener('loadedmetadata', () => {
+  buildTimelines(data.detected_times, videoPlayer.duration);
+  }, { once: true });
+  //buildTimelines(data.detected_times, player.duration);
 }
 
 // 비디오 소스 설정
@@ -196,6 +199,7 @@ function setVideoSource(path) {
 // 타임라인 프레임 표시
 function displayFramesInTimeline(frames, frameTimes, detectedTimes = []) {
   const wrapper = document.getElementById('framesWrapper');
+  if (!wrapper) return;
   wrapper.innerHTML = '';
   const detectedSet = new Set(detectedTimes.map(t => Math.floor(t)));
   const base = currentVideoFile.split('.').slice(0, -1).join('.');
