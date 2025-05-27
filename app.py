@@ -40,7 +40,7 @@ os.makedirs(FRAME_FOLDER,  exist_ok=True)
 os.makedirs(DETECT_FOLDER, exist_ok=True)
 
 # ── YOLO 모델 로드 ───────────────────────────────────────────
-model = YOLO('/home/mini/CCTV_Timeline_v2/all_yolo11x_imgsz640_orgin.pt')
+model = YOLO('/home/mini/CCTV_Timeline_v2/waterdeer.pt')
 
 # ── DB 및 로그인 ────────────────────────────────────────────
 app.config['SQLALCHEMY_DATABASE_URI'] = (

@@ -85,50 +85,102 @@ body {
 ------------------------------ 
 */
 /* 배경보다 뒤에 그려지지 않도록 순서 보장 */
-/* 타임라인 래퍼 아래에 버튼 공간 확보 */
-#timelineWrapper {
-  position: relative;
-  padding-bottom: 24px;    /* 버튼 높이(24px) + 여유 */
+
+/* style.css */
+
+/* 1) 가로 스크롤 컨테이너 */
+.timeline-scroller {
+  overflow-x: auto;     /* 가로 스크롤 */
+  width: 100%;          /* 컨테이너 너비 */
 }
 
-/* 버튼 위치 컨테이너(.position-relative) 기준으로 absolute 배치 */
-.clip-btn {
+/* 2) 타임라인 래퍼 */
+.timeline-wrapper {
+  position: relative;
+  height: 60px;         /* 선·점 표시 높이 */
+  width: auto;          /* JS에서 설정 */
+}
+
+/* 3) 배경 격자 */
+.timeline-bg {
   position: absolute;
-  top: 0;                             /* 컨테이너 상단 */
-  transform: translateX(-50%);
-  width: 10px; height: 10px;
-  border: none;
-  background-color: #ac0010;
-  color: #fff;
-  border-radius: 50%;
-  line-height: 24px;
-  text-align: center;
-  cursor: pointer;
+  top: 0; left: 0;
+  width: 100%;          /* 부모 너비(=전체 타임라인 길이) */
+  height: 100%;
+  background-color: #eee;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      #ccc 0, #ccc 1px,
+      transparent 1px, transparent 50px
+    );
+  background-size: 50px 100%; /* 10초당 50px */
+  z-index: 0;
+}
+
+/* 4) 점·라인 표시 */
+.timeline-dots {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;          /* JS에서 설정한 너비 상속 */
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 5) 진행 바 */
+.timeline-progress {
+  position: absolute;
+  top: 0; left: 0;
+  width: 2px;
+  height: 100%;
+  background: #dc3545;
+  z-index: 2;
+}
+
+/* 6) 클립 버튼 컨트롤 */
+.timeline-controls {
+  position: relative;
+  height: 40px;         /* 버튼 표시 높이 */
+  width: auto;          /* JS에서 설정 (타임라인과 동일) */
+  margin-top: 5px;      /* 타임라인과 간격 */
   z-index: 3;
 }
 
-
-/* 구간 연결 실선 */
+/* 7) 요소 크기 조정 */
 .segment-line {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  height: 2px;                /* 선 두께 */
-  background-color: #4caf50;   /* 선 색상 */
-  z-index: 1;
+  height: 6px;          /* 선 두께 확대 */
+  background-color: #4caf50;
 }
 
-/* 시작·끝 점(dot) */
 .segment-dot {
   position: absolute;
-  width: 12px; height: 12px;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;          /* 점 크기 확대 */
+  height: 16px;
   border: 2px solid #4caf50;
   border-radius: 50%;
   background: #fff;
+}
+
+.clip-btn {
+  position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  z-index: 2;
+  width: 16px;          /* 버튼 크기 확대 */
+  height: 16px;
+  background-color: #ac0010;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
 }
+
+
+
 
 
 /* ------------------------------

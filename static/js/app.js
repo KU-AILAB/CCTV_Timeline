@@ -8,7 +8,7 @@ function hms2sec(hms) {
   return h * 3600 + m * 60 + s;
 }
 
-/** .sec/.avi → .mp4 매핑 (수정: fn이 undefined/null일 때 빈 문자열 반환) */
+/** .sec/.avi → .mp4 매핑 */
 function getPlayableFilename(fn) {
   if (!fn) return '';
   const ext = fn.split('.').pop().toLowerCase();
@@ -39,53 +39,51 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   loadServerVideos();
- // 재생 위치 표시
- if (videoPlayer) {
-  videoPlayer.addEventListener('timeupdate', () => {
-    if (!videoPlayer.duration) return;
-    const prog = document.getElementById('timelineProgress');
-    if (prog) {
-      const pct = videoPlayer.currentTime / videoPlayer.duration * 100;
-      prog.style.left = `${pct}%`;
-    }
-  });
-}
 
-// Detect 버튼 클릭
-if (detectBtn) {
-  detectBtn.addEventListener('click', e => {
-    e.preventDefault();
-    if (!videoFileInput || !videoFileInput.files[0]) {
-      return alert('파일을 선택하세요');
-    }
-    handleUploadAndDetect();
-  });
-}
+  // 재생 위치 표시
+  if (videoPlayer) {
+    videoPlayer.addEventListener('timeupdate', () => {
+      if (!videoPlayer.duration) return;
+      const prog = document.getElementById('timelineProgress');
+      if (prog) {
+        const pct = videoPlayer.currentTime / videoPlayer.duration * 100;
+        prog.style.left = `${pct}%`;
+      }
+    });
+  }
 
-// Upload Only 버튼 클릭
-if (uploadOnlyBtn) {
-  uploadOnlyBtn.addEventListener('click', e => {
-    e.preventDefault();
-    uploadOnly();
-  });
-}
+  // Detect 버튼 클릭
+  if (detectBtn) {
+    detectBtn.addEventListener('click', e => {
+      e.preventDefault();
+      if (!videoFileInput || !videoFileInput.files[0]) {
+        return alert('파일을 선택하세요');
+      }
+      handleUploadAndDetect();
+    });
+  }
 
-// 서비스 워커 등록
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
-}
+  // Upload Only 버튼 클릭
+  if (uploadOnlyBtn) {
+    uploadOnlyBtn.addEventListener('click', e => {
+      e.preventDefault();
+      uploadOnly();
+    });
+  }
+
+  // 서비스 워커 등록
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
 });
 
-// 진행 바 업데이트
+// 업로드 진행 바 업데이트
 function updateProgressBar(pct) {
-const bar = document.getElementById('uploadProgress');
-if (bar) {
-  bar.style.width = `${pct}%`;
-}
+  const bar = document.getElementById('uploadProgress');
+  if (bar) bar.style.width = `${pct}%`;
 }
 
 /** 서버 영상 목록 로드 */
-// loadServerVideos 함수 수정 (tr → td 구조 복원)
 async function loadServerVideos() {
   const res    = await fetch('/api/videos', { credentials: 'same-origin' });
   const videos = await res.json();
@@ -96,20 +94,16 @@ async function loadServerVideos() {
   videos.forEach(v => {
     if (!seen.has(v.filename)) {
       seen.add(v.filename);
-
       const tr = document.createElement('tr');
-      // 수정: tr.innerHTML 대신 td 요소를 따로 생성해서 추가
       const td = document.createElement('td');
       td.className   = 'ps-3';
       td.textContent = v.filename;
       tr.appendChild(td);
-
       tr.addEventListener('click', () => selectServerVideo(v.filename));
       tbody.appendChild(tr);
     }
   });
 }
-
 
 function selectServerVideo(fn) {
   currentVideoFile = fn;
@@ -202,10 +196,6 @@ async function uploadChunks(file, sid, offset) {
   }
 }
 
-function updateProgressBar(pct) {
-  document.getElementById('uploadProgress').style.width = `${pct}%`;
-}
-
 async function extractAndDetect(fn) {
   const st = document.getElementById('startTime').value || '00:00:00';
   const res = await fetch('/extract_frames', {
@@ -222,14 +212,30 @@ async function extractAndDetect(fn) {
   player.addEventListener('loadedmetadata', () => {
     player.currentTime = hms2sec(st);
     buildTimelineWithDots(data.detected_times, player.duration);
+
+    // 추가: 탐지 결과 섹션 표시 및 링크 설정
+    const detSec = document.getElementById('detectionSection');
+    detSec.classList.remove('d-none');
+    document.getElementById('csvDownloadBtn').href  = data.csv;
+    document.getElementById('jsonDownloadBtn').href = data.json;
   }, { once: true });
 }
 
-
 function buildTimelineWithDots(detectedTimes, duration) {
-  const dotsWr   = document.getElementById('dotsWrapper');
-  const controls = document.getElementById('timelineControls');
-  dotsWr.innerHTML = '';
+  const cellWidth  = 50;                       
+  const totalCells = Math.ceil(duration / 10);
+  const totalWidth = totalCells * cellWidth;
+  const scroller   = document.getElementById('timelineScroller');
+  const wrapper    = document.getElementById('timelineWrapper');
+  const dotsWr     = document.getElementById('dotsWrapper');
+  const controls   = document.getElementById('timelineControls');
+
+  scroller.scrollLeft = 0;
+  wrapper.style.width  = `${totalWidth}px`;
+  dotsWr.style.width   = `${totalWidth}px`;
+  controls.style.width = `${totalWidth}px`;
+
+  dotsWr.innerHTML   = '';
   controls.innerHTML = '';
   if (!duration || detectedTimes.length === 0) return;
 
@@ -246,42 +252,38 @@ function buildTimelineWithDots(detectedTimes, duration) {
   ranges.push([start, prev]);
 
   ranges.forEach(([s, e]) => {
-    const leftPct   = ( s    / duration) * 100;
-    const rightPct  = ((e+1)/ duration) * 100;
-    const widthPct  = rightPct - leftPct;
-    const centerPct = leftPct + widthPct/2;
+    const leftPx  = (s / 10) * cellWidth;
+    const widthPx = ((e + 1 - s) / 10) * cellWidth;
+    const centerX = leftPx + widthPx / 2;
 
-    // 선
     const line = document.createElement('div');
     line.className   = 'segment-line';
-    line.style.left  = `${leftPct}%`;
-    line.style.width = `${widthPct}%`;
+    line.style.left  = `${leftPx}px`;
+    line.style.width = `${widthPx}px`;
     dotsWr.appendChild(line);
 
-    // 시작·끝 dot
-    [leftPct, rightPct].forEach(pct => {
+    [leftPx, leftPx + widthPx].forEach(x => {
       const dot = document.createElement('div');
-      dot.className   = 'segment-dot';
-      dot.style.left  = `${pct}%`;
+      dot.className  = 'segment-dot';
+      dot.style.left = `${x}px`;
       dotsWr.appendChild(dot);
     });
 
-    // 버튼: controls에 추가
     const btn = document.createElement('button');
     btn.className  = 'clip-btn';
-    btn.style.left = `${centerPct}%`;
+    btn.style.left = `${centerX}px`;
     btn.addEventListener('click', () => {
       const url = `/download_clip?video_file=${encodeURIComponent(currentVideoFile)
-        }&start=${s.toFixed(2)}&end=${(e+1).toFixed(2)}`;
+        }&start=${s.toFixed(2)}&end=${(e + 1).toFixed(2)}`;
       const a = document.createElement('a');
       a.href = url; a.download = '';
-      document.body.appendChild(a); a.click();
+      document.body.appendChild(a);
+      a.click();
       document.body.removeChild(a);
     });
     controls.appendChild(btn);
   });
 }
-
 
 /** 초 → HH:MM:SS 포맷 */
 function secondsToHMS(sec) {
