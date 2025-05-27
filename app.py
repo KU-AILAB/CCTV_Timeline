@@ -8,6 +8,7 @@ import shutil
 import pandas as pd
 import subprocess
 from datetime import timedelta
+from math import ceil
 from flask import (
     Flask, request, jsonify, render_template, redirect, url_for,
     flash, send_from_directory, send_file
@@ -39,7 +40,7 @@ os.makedirs(FRAME_FOLDER,  exist_ok=True)
 os.makedirs(DETECT_FOLDER, exist_ok=True)
 
 # ── YOLO 모델 로드 ───────────────────────────────────────────
-model = YOLO('/home/sjy/cctvtest3/CCTV_Timeline_v2/waterdeer.pt')
+model = YOLO('/home/mini/CCTV_Timeline_v2/all_yolo11x_imgsz640_orgin.pt')
 
 # ── DB 및 로그인 ────────────────────────────────────────────
 app.config['SQLALCHEMY_DATABASE_URI'] = (
@@ -175,8 +176,9 @@ def group_contiguous_ranges(times, max_gap=5):
         else:
             ranges.append((start, prev))
             start = prev = t
-    ranges.append((start, prev))
+    ranges.append((start, prev + 1))  # ← 여기 +1 추가
     return ranges
+
 
 def extract_frames(video_path, output_folder, offset_sec=0):
     if os.path.exists(output_folder):
@@ -220,7 +222,7 @@ def detect_animals(frames_folder, fps, video_name, offset_sec=0):
         dets = model(frame)[0].boxes.data.cpu().numpy()
         for *_, conf, cid in dets:
             if conf > 0.2:
-                buckets[model.names[int(cid)]].add(int(t))
+                buckets[model.names[int(cid)]].add(ceil(t))
     merged = []
     for animal, ts in buckets.items():
         for s, e in group_contiguous_ranges(sorted(ts)):
@@ -307,22 +309,26 @@ def index():
 @app.route('/api/videos')
 @login_required
 def get_server_videos():
-    files = []
-    for f in os.listdir(UPLOAD_FOLDER):
-        path = os.path.join(UPLOAD_FOLDER, f)
-        if not os.path.isfile(path):
-            continue
-        if not allowed_file(f):
-            continue
-        # .sec 파일은 컨테이너 변환 후 삭제하므로 목록에서 제외
-        if f.lower().endswith('.sec'):
-            continue
-        files.append(f)
-    files.sort(
-        key=lambda fn: os.path.getmtime(os.path.join(UPLOAD_FOLDER, fn)),
-        reverse=True
+    videos = (
+        Video.query
+        .filter_by(user_id=current_user.id)
+        .order_by(Video.created_at.desc())
+        .all()
     )
-    return jsonify([{'filename': fn} for fn in files])
+    
+    # 중복 제거 및 순서 유지
+    seen = set()
+    unique_files = []
+    for v in videos:
+        if not os.path.exists(os.path.join(UPLOAD_FOLDER, v.filename)):
+            continue
+        if v.filename not in seen:
+            seen.add(v.filename)
+            unique_files.append({'filename': v.filename})
+
+    return jsonify(unique_files)
+
+
 
 # ── 업로드 초기화 ───────────────────────────────────────────
 @app.route('/upload/init', methods=['POST'])
@@ -524,4 +530,4 @@ def api_my_uploads_progress():
         for v in videos
     ])
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=2312, debug=True)
+    app.run(host="0.0.0.0", port=2313, debug=True)
