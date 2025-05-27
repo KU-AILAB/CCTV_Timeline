@@ -275,3 +275,10 @@ body {
 .upload-row .btn-sm {
   height: calc(1.5em + 0.5rem + 2px);
 }
+
+
+
+/* 진행 바(빨간선)에 드래그 커서 추가 */
+#timelineProgress {
+  cursor: ew-resize;
+}

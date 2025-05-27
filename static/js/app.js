@@ -1,5 +1,3 @@
-// 전체 수정된 app.js
-
 let currentVideoFile = '';
 
 /** HH:MM:SS → 초 변환 */
@@ -23,7 +21,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const detectBtn      = document.getElementById('detectBtn');
   const uploadOnlyBtn  = document.getElementById('uploadOnlyBtn');
 
-  // 이전 업로드 이어받기 알림
+  // 이전 업로드 이어받기
   const pending = JSON.parse(localStorage.getItem('pendingUpload') || 'null');
   if (pending) {
     const pct = Math.round(pending.uploadedSize / pending.totalSize * 100);
@@ -40,19 +38,58 @@ window.addEventListener('DOMContentLoaded', () => {
 
   loadServerVideos();
 
-  // 재생 위치 표시
+  // 재생 위치 표시 및 스크롤 동기화
   if (videoPlayer) {
     videoPlayer.addEventListener('timeupdate', () => {
       if (!videoPlayer.duration) return;
       const prog = document.getElementById('timelineProgress');
-      if (prog) {
-        const pct = videoPlayer.currentTime / videoPlayer.duration * 100;
-        prog.style.left = `${pct}%`;
-      }
+      const pct  = videoPlayer.currentTime / videoPlayer.duration * 100;
+      prog.style.left = `${pct}%`;
+      const scroller   = document.getElementById('timelineScroller');
+      const wrapper    = document.getElementById('timelineWrapper');
+      const totalWidth = wrapper.offsetWidth;
+      const currentX   = (videoPlayer.currentTime / videoPlayer.duration) * totalWidth;
+      const halfWidth  = scroller.clientWidth / 2;
+      scroller.scrollLeft = Math.max(0, currentX - halfWidth);
     });
   }
 
-  // Detect 버튼 클릭
+  // --- 변경: 타임라인 클릭으로 탐색 ---
+  const wrapper = document.getElementById('timelineWrapper');
+  if (wrapper && videoPlayer) {
+    wrapper.addEventListener('click', e => {
+      const rect = wrapper.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct    = clickX / rect.width;
+      videoPlayer.currentTime = pct * videoPlayer.duration;
+    });
+  }
+
+  // --- 변경: 프로그레스바 드래그로 실시간 탐색 ---
+  const prog = document.getElementById('timelineProgress');
+  let isDragging = false;
+
+  if (prog && wrapper && videoPlayer) {
+    prog.addEventListener('pointerdown', e => {
+      isDragging = true;
+      prog.setPointerCapture(e.pointerId);
+    });
+    prog.addEventListener('pointermove', e => {
+      if (!isDragging) return;
+      const rect = wrapper.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      x = Math.max(0, Math.min(rect.width, x));
+      const pct = x / rect.width;
+      prog.style.left = `${pct * 100}%`;                                  // 변경: 프로그레스바 즉시 움직임
+      videoPlayer.currentTime = pct * videoPlayer.duration;               // 변경: 드래그 중 현재 시간 변경
+    });
+    prog.addEventListener('pointerup', e => {
+      isDragging = false;
+      prog.releasePointerCapture(e.pointerId);
+    });
+  }
+
+  // Detect 버튼
   if (detectBtn) {
     detectBtn.addEventListener('click', e => {
       e.preventDefault();
@@ -63,7 +100,7 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Upload Only 버튼 클릭
+  // Upload Only 버튼
   if (uploadOnlyBtn) {
     uploadOnlyBtn.addEventListener('click', e => {
       e.preventDefault();
@@ -90,7 +127,6 @@ async function loadServerVideos() {
   const tbody  = document.getElementById('serverVideos');
   tbody.innerHTML = '';
   const seen = new Set();
-
   videos.forEach(v => {
     if (!seen.has(v.filename)) {
       seen.add(v.filename);
@@ -114,7 +150,6 @@ function selectServerVideo(fn) {
 async function uploadOnly() {
   const file = document.getElementById('videoFile').files[0];
   if (!file) return alert('파일을 선택하세요');
-
   try {
     const init = await fetch('/upload/init', {
       method: 'POST',
@@ -148,7 +183,6 @@ async function handleUploadAndDetect() {
     body: JSON.stringify({ filename: file.name, total_size: file.size })
   });
   const { session_id, uploaded_size } = await init.json();
-
   localStorage.setItem('pendingUpload', JSON.stringify({
     sessionId: session_id,
     filename: file.name,
@@ -170,7 +204,6 @@ async function resumeUpload(file, sid, offset) {
 async function uploadChunks(file, sid, offset) {
   const chunkSize = 1024 * 1024;
   let uploaded = offset;
-
   while (uploaded < file.size) {
     const end   = Math.min(uploaded + chunkSize, file.size);
     const chunk = file.slice(uploaded, end);
@@ -178,7 +211,6 @@ async function uploadChunks(file, sid, offset) {
     form.append('session_id', sid);
     form.append('offset', uploaded);
     form.append('chunk', chunk);
-
     const res  = await fetch('/upload/chunk', {
       method: 'POST',
       credentials: 'same-origin',
@@ -187,7 +219,6 @@ async function uploadChunks(file, sid, offset) {
     const data = await res.json();
     uploaded = data.uploaded_size;
     updateProgressBar(data.progress);
-
     const p = JSON.parse(localStorage.getItem('pendingUpload') || '{}');
     if (p.sessionId === sid) {
       p.uploadedSize = uploaded;
@@ -203,17 +234,13 @@ async function extractAndDetect(fn) {
     body: new URLSearchParams({ video_file: fn, start_time: st })
   });
   const data = await res.json();
-
   const player = document.getElementById('videoPlayer');
   currentVideoFile = fn;
   player.src = `/static/uploads/${encodeURIComponent(getPlayableFilename(fn))}`;
   player.load();
-
   player.addEventListener('loadedmetadata', () => {
     player.currentTime = hms2sec(st);
     buildTimelineWithDots(data.detected_times, player.duration);
-
-    // 추가: 탐지 결과 섹션 표시 및 링크 설정
     const detSec = document.getElementById('detectionSection');
     detSec.classList.remove('d-none');
     document.getElementById('csvDownloadBtn').href  = data.csv;
@@ -222,7 +249,7 @@ async function extractAndDetect(fn) {
 }
 
 function buildTimelineWithDots(detectedTimes, duration) {
-  const cellWidth  = 50;                       
+  const cellWidth  = 50;
   const totalCells = Math.ceil(duration / 10);
   const totalWidth = totalCells * cellWidth;
   const scroller   = document.getElementById('timelineScroller');
@@ -230,10 +257,10 @@ function buildTimelineWithDots(detectedTimes, duration) {
   const dotsWr     = document.getElementById('dotsWrapper');
   const controls   = document.getElementById('timelineControls');
 
-  scroller.scrollLeft = 0;
-  wrapper.style.width  = `${totalWidth}px`;
-  dotsWr.style.width   = `${totalWidth}px`;
-  controls.style.width = `${totalWidth}px`;
+  scroller.scrollLeft     = 0;
+  wrapper.style.width     = `${totalWidth}px`;
+  dotsWr.style.width      = `${totalWidth}px`;
+  controls.style.width    = `${totalWidth}px`;
 
   dotsWr.innerHTML   = '';
   controls.innerHTML = '';
