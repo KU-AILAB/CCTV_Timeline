@@ -331,7 +331,7 @@ function buildTimelineWithDots(detectedTimes, duration) {
   const ranges = [];
   let start = secs[0], prev = secs[0];
   for (let i = 1; i < secs.length; i++) {
-    if (secs[i] - prev <= 1) prev = secs[i];
+    if (secs[i] - prev <= 10) prev = secs[i];
     else { ranges.push([start, prev]); start = prev = secs[i]; }
   }
   ranges.push([start, prev]);

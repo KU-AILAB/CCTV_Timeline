@@ -194,7 +194,7 @@ def split_video_segment(inp, outp, start, end):
         if os.path.exists(tmp):
             os.remove(tmp)
 
-def group_contiguous_ranges(times, max_gap=5):
+def group_contiguous_ranges(times, max_gap=10):
     if not times:
         return []
     ranges = []
@@ -338,23 +338,39 @@ def index():
 @app.route('/api/videos')
 @login_required
 def get_server_videos():
+    """
+    로그인한 사용자가 업로드한 영상 목록을 반환합니다.
+    - .sec 파일은 제외
+    - 파일이 실제로 존재하는 것만
+    - 중복 제거 및 생성일자 내림차순 유지
+    """
+    # 1) DB에서 모든 영상 조회
     videos = (
         Video.query
-        .filter_by(user_id=current_user.id)
-        .order_by(Video.created_at.desc())
-        .all()
+             .filter_by(user_id=current_user.id)
+             .order_by(Video.created_at.desc())
+             .all()
     )
-    
-    # 중복 제거 및 순서 유지
+
     seen = set()
     unique_files = []
-    for v in videos:
-        if not os.path.exists(os.path.join(UPLOAD_FOLDER, v.filename)):
-            continue
-        if v.filename not in seen:
-            seen.add(v.filename)
-            unique_files.append({'filename': v.filename})
 
+    for v in videos:
+        # 2) .sec 확장자는 목록에 포함하지 않음
+        if v.filename.lower().endswith('.sec'):
+            continue
+
+        # 3) 실제 파일이 업로드 폴더에 존재하는지 확인
+        full_path = os.path.join(UPLOAD_FOLDER, v.filename)
+        if not os.path.exists(full_path):
+            continue
+
+        # 4) 중복 제거
+        if v.filename in seen:
+            continue
+        seen.add(v.filename)
+
+        unique_files.append({'filename': v.filename})
     return jsonify(unique_files)
 
 
@@ -420,7 +436,7 @@ def upload_chunk():
         final_path = os.path.join(UPLOAD_FOLDER, sess.filename)
         os.replace(part_path, final_path)
 
-        if sess.filename.lower().endswith('.sec'):
+        if sess.filename.lower().endswith(('.sec', '.avi')):
             mp4_path = final_path.rsplit('.', 1)[0] + '.mp4'
             convert_sec_to_mp4_ffmpeg(final_path, mp4_path)
             if video:
@@ -456,7 +472,7 @@ def extract_frames_api():
     src    = os.path.join(UPLOAD_FOLDER, vf)
 
     # 컨테이너 변환(.sec → .mp4) 로직 (기존과 동일)
-    if vf.lower().endswith('.sec'):
+    if vf.lower().endswith(('.sec', '.avi')):
         mp4_name = vf.rsplit('.', 1)[0] + '.mp4'
         mp4_path = os.path.join(UPLOAD_FOLDER, mp4_name)
         if not os.path.exists(mp4_path):
