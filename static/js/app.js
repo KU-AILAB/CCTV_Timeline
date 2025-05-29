@@ -18,6 +18,17 @@ function getPlayableFilename(fn) {
     : fn;
 }
 
+// ── 헬퍼: 초(sec)를 'HH:MM:SS' 또는 'MM:SS' 문자열로 포맷 ──
+function formatLabel(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const hh = h.toString().padStart(2, '0');
+  const mm = m.toString().padStart(2, '0');
+  const ss = s.toString().padStart(2, '0');
+  return (hh === '00' ? `${mm}:${ss}` : `${hh}:${mm}:${ss}`);
+}
+
 // ─── 1) 범위 병합 헬퍼 ───────────────────────────────
 function mergeRanges() {
   // 시작 시간 기준 정렬
@@ -44,7 +55,13 @@ function renderSegments() {
   const wrapper  = document.getElementById('timelineWrapper');
   const dotsWr   = document.getElementById('dotsWrapper');
   const controls = document.getElementById('timelineControls');
-  const maxPx    = wrapper.offsetWidth;
+  const pxPerSec = 50/10;
+  const totalPx  = videoDuration * pxPerSec;
+  wrapper.style.width  = `${totalPx}px`;
+  dotsWr.style.width   = `${totalPx}px`;
+  controls.style.width = `${totalPx}px`;
+
+  const maxPx = totalPx;  // wrapper.offsetWidth 대신 직접 사용
 
   dotsWr.innerHTML   = '';
   controls.innerHTML = '';
@@ -353,45 +370,32 @@ async function finalizeSegments() {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      video_file: currentVideoFile,
-      segments:    timelineRanges
-    })
+    body: JSON.stringify({ video_file: currentVideoFile, segments: timelineRanges })
   });
   const data = await res.json();
 
-  // ① CSV/JSON 다운로드 링크 설정
-  const dlBtns = document.getElementById('downloadButtons');
+  // 1) CSV/JSON 링크 갱신
   document.getElementById('csvDownloadBtn').href  = data.csv;
   document.getElementById('jsonDownloadBtn').href = data.json;
 
-  // ② 클립 다운로드 버튼 생성
-  const controls = document.getElementById('timelineControls');
-  controls.innerHTML = '';  // 이전 버튼 제거
-  data.clips.forEach((url, idx) => {
+  // 2) 클립 버튼 생성 (원래대로, 위치는 detectionSection 아래)
+  const container = document.getElementById('timelineControls');
+  container.innerHTML = '';  // 이전 버튼 제거
+
+  timelineRanges.forEach((rng, idx) => {
+    const startLabel = formatLabel(rng.start);
+    const endLabel   = formatLabel(rng.end);
     const a = document.createElement('a');
-    a.href        = url;
-    a.textContent = `클립 ${idx+1}`;
+    a.href        = data.clips[idx];  // 서버가 준 다운로드 URL
+    a.textContent = `${startLabel}~${endLabel}`;
     a.className   = 'btn btn-outline-primary btn-sm me-1';
-    controls.appendChild(a);
+    container.appendChild(a);
   });
 
-  // ③ UI 갱신: 확정 버튼 숨기고 다운로드 버튼들 보임
+  // 3) UI 갱신
   document.getElementById('confirmBtn').classList.add('d-none');
-  dlBtns.classList.remove('d-none');
+  document.getElementById('downloadButtons').classList.remove('d-none');
 }
-
-// ❸ 이벤트 바인딩 (DOMContentLoaded 내부)
-window.addEventListener('DOMContentLoaded', () => {
-  // … 기존 upload/resume/detect 바인딩 유지 …
-
-  // 확정 버튼 리스너
-  const confirmBtn = document.getElementById('confirmBtn');
-  confirmBtn.addEventListener('click', e => {
-    e.preventDefault();
-    finalizeSegments();
-  });
-});
 
 
 function buildTimelineWithDots(detectedTimes, duration) {
