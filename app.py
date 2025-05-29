@@ -40,7 +40,7 @@ os.makedirs(FRAME_FOLDER,  exist_ok=True)
 os.makedirs(DETECT_FOLDER, exist_ok=True)
 
 # ── YOLO 모델 로드 ───────────────────────────────────────────
-model = YOLO('/home/mini/CCTV_Timeline_v2/waterdeer.pt')
+model = YOLO('/home/sjy/0528_waterdeer_yolo11m/0528_waterdeer_yolo11m8/weights/0528_waterdeer_11m.pt')
 
 # ── DB 및 로그인 ────────────────────────────────────────────
 app.config['SQLALCHEMY_DATABASE_URI'] = (
@@ -136,6 +136,35 @@ def convert_sec_to_mp4_ffmpeg(sec_path, mp4_path):
     except subprocess.CalledProcessError as e:
         logging.error(f".sec → .mp4 변환 실패: {e}")
 
+
+# ──────────────────────────────────────────────────────────
+# NEW ─ 간이 검출: 시각 리스트만 반환 (CSV/JSON 생성 X)
+# ──────────────────────────────────────────────────────────
+def detect_times_preview(frames_folder: str, fps: float, offset_sec: float = 0) -> list[int]:
+    """
+    YOLO로 프레임을 훑어본 뒤, '검출된 초 단위 시각'만 리스트로 반환한다.
+    - CSV/JSON/클립을 생성하지 않는다.
+    """
+    secs = set()
+    files = sorted(
+        os.listdir(frames_folder),
+        key=lambda x: int(x.split('_')[1].split('.')[0])
+    )
+    for fname in files:
+        idx = int(fname.split('_')[1].split('.')[0])
+        t   = idx / fps - offset_sec
+        if t < 0:
+            continue
+        frame = cv2.imread(os.path.join(frames_folder, fname))
+        if frame is None:
+            continue
+        dets = model(frame)[0].boxes.data.cpu().numpy()
+        for *_, conf, cid in dets:
+            if conf > 0.2:                 # 기존 임계값과 동일
+                secs.add(int(t))           # 소수점 이하 버림
+    return sorted(secs)
+
+
 def split_video_segment(inp, outp, start, end):
     """
     - 항상 libx264/aac 로 재인코딩
@@ -204,7 +233,7 @@ def extract_frames(video_path, output_folder, offset_sec=0):
         count += 1
     cap.release()
     return saved, times, fps
-
+'''
 def detect_animals(frames_folder, fps, video_name, offset_sec=0):
     buckets = defaultdict(set)
     files = sorted(
@@ -237,7 +266,7 @@ def detect_animals(frames_folder, fps, video_name, offset_sec=0):
     with open(json_p, 'w', encoding='utf-8') as f:
         json.dump(merged, f, ensure_ascii=False, indent=2)
     return csv_p, json_p
-
+'''
 def get_detected_times_from_csv(csv_path):
     if not os.path.exists(csv_path):
         return []
@@ -426,6 +455,7 @@ def extract_frames_api():
     offset = convert_time_to_seconds(st)
     src    = os.path.join(UPLOAD_FOLDER, vf)
 
+    # 컨테이너 변환(.sec → .mp4) 로직 (기존과 동일)
     if vf.lower().endswith('.sec'):
         mp4_name = vf.rsplit('.', 1)[0] + '.mp4'
         mp4_path = os.path.join(UPLOAD_FOLDER, mp4_name)
@@ -441,38 +471,82 @@ def extract_frames_api():
     current_user.progress = 30
     db.session.commit()
 
+    # ① 프레임 추출
     frames, frame_times, fps = extract_frames(src, out_dir, offset)
     frame_times = [t - offset for t in frame_times]
 
     current_user.progress = 60
     db.session.commit()
 
-    csv_path, json_path = detect_animals(out_dir, fps, name, offset)
-    detected_times      = get_detected_times_from_csv(csv_path)
-
-    segments = []
-    for s, e in group_contiguous_ranges(detected_times):
-        if e <= s:
-            continue
-        abs_s    = offset + s
-        abs_e    = offset + e
-        seg_name = f"{name}_{format_seconds_to_hms(abs_s)}_{format_seconds_to_hms(abs_e)}.mp4"
-        dest     = os.path.join(DETECT_FOLDER, seg_name)
-        split_video_segment(src, dest, abs_s, abs_e)
-        segments.append(seg_name)
+    # ② “임시” 검출: 시각 배열만 반환
+    detected_times = detect_times_preview(out_dir, fps, offset)
 
     current_user.progress = 100
     db.session.commit()
 
     return jsonify({
-        'frames':         frames,
-        'frame_times':    frame_times,
-        'detected_times': detected_times,
-        'csv':            url_for('download_csv',  filename=os.path.basename(csv_path)),
-        'json':           url_for('download_json', filename=os.path.basename(json_path)),
-        'segments':       segments
+        'detected_times': detected_times    # 타임라인용 데이터만 전달
     })
 
+
+# ──────────────────────────────────────────────────────────
+# NEW ─ 최종 구간 확정 엔드포인트
+# ──────────────────────────────────────────────────────────
+@app.route('/finalize_segments', methods=['POST'])
+@login_required
+def finalize_segments():
+    """
+    클라이언트가 보낸 최종 구간 정보로
+    ① 구간별 클립 생성 ② CSV/JSON 생성 후
+    다운로드 URL 을 JSON 으로 반환한다.
+    요청 형식: {
+        "video_file": "xxx.mp4",
+        "segments": [ {"start": 12.3, "end": 18.7}, ... ]
+    }
+    """
+    data     = request.get_json(silent=True) or {}
+    vf       = data.get('video_file')
+    segments = data.get('segments', [])
+    if not vf or not segments:
+        return jsonify({'error': 'invalid payload'}), 400
+
+    src   = os.path.join(UPLOAD_FOLDER, vf)
+    if not os.path.exists(src):
+        return jsonify({'error': 'file not found'}), 404
+
+    name      = os.path.splitext(vf)[0]
+    clip_urls = []
+    rows      = []
+
+    for seg in segments:
+        s = float(seg['start'])
+        e = float(seg['end'])
+        if e <= s:                     # 방어 코드
+            continue
+        clip_name = f"{name}_{format_seconds_to_hms(s)}_{format_seconds_to_hms(e)}.mp4"
+        dest      = os.path.join(DETECT_FOLDER, clip_name)
+        split_video_segment(src, dest, s, e)
+        clip_urls.append(url_for('download_clip', video_file=vf, start=s, end=e))
+
+        rows.append({
+            'time'  : f"{format_seconds_to_hms(s)}-{format_seconds_to_hms(e)}",
+            'animal': 'unknown'        # 필요 시 후처리 검출로 채우기
+        })
+
+    # CSV / JSON 저장
+    df = pd.DataFrame(rows)
+    csv_p  = os.path.join(DETECT_FOLDER, f"{name}_final.csv")
+    json_p = os.path.join(DETECT_FOLDER, f"{name}_final.json")
+    df.to_csv(csv_p,  index=False, encoding='utf-8')
+    df.to_json(json_p, orient='records', force_ascii=False, indent=2)
+
+    return jsonify({
+        'clips': clip_urls,
+        'csv'  : url_for('download_csv',  filename=os.path.basename(csv_p)),
+        'json' : url_for('download_json', filename=os.path.basename(json_p))
+    })
+    
+    
 # ── 다운로드 엔드포인트 ─────────────────────────────────────
 @app.route('/download_csv/<filename>')
 @login_required
@@ -530,4 +604,4 @@ def api_my_uploads_progress():
         for v in videos
     ])
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=2313, debug=True)
+    app.run(host="0.0.0.0", port=2312, debug=True)

@@ -124,7 +124,7 @@ body {
   top: 0; left: 0;
   width: 100%;          /* JS에서 설정한 너비 상속 */
   height: 100%;
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 1;
 }
 
