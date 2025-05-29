@@ -18,6 +18,77 @@ function getPlayableFilename(fn) {
     : fn;
 }
 
+// ─── 1) 범위 병합 헬퍼 ───────────────────────────────
+function mergeRanges() {
+  // 시작 시간 기준 정렬
+  timelineRanges.sort((a,b) => a.start - b.start);
+  const merged = [];
+  for (const r of timelineRanges) {
+    if (!merged.length) {
+      merged.push({ start: r.start, end: r.end });
+    } else {
+      const last = merged[merged.length-1];
+      // 겹치거나 인접(겹침 허용)하면 병합
+      if (r.start <= last.end) {
+        last.end = Math.max(last.end, r.end);
+      } else {
+        merged.push({ start: r.start, end: r.end });
+      }
+    }
+  }
+  timelineRanges = merged;
+}
+
+// ─── 2) 세그먼트 DOM 렌더링 ─────────────────────────
+function renderSegments() {
+  const wrapper  = document.getElementById('timelineWrapper');
+  const dotsWr   = document.getElementById('dotsWrapper');
+  const controls = document.getElementById('timelineControls');
+  const maxPx    = wrapper.offsetWidth;
+
+  dotsWr.innerHTML   = '';
+  controls.innerHTML = '';
+
+  timelineRanges.forEach((rng, idx) => {
+    const s = rng.start, e = rng.end;
+    const leftPx  = (s / videoDuration) * maxPx;
+    const widthPx = ((e - s) / videoDuration) * maxPx;
+    const centerX = leftPx + widthPx/2;
+
+    // ── 2.1) 세그먼트 라인
+    const line = document.createElement('div');
+    line.className   = 'segment-line';
+    line.style.left  = `${leftPx}px`;
+    line.style.width = `${widthPx}px`;
+    dotsWr.appendChild(line);
+
+    // ── 2.2) 드래그용 점 (양끝)
+    ['left','right'].forEach(edge => {
+      const dot = document.createElement('div');
+      dot.className   = 'segment-dot';
+      dot.style.left  = `${edge==='left'?leftPx:(leftPx+widthPx)}px`;
+      dot.dataset.idx = idx;
+      dot.dataset.edge= edge;
+      dot.addEventListener('pointerdown', startDotDrag);
+      dotsWr.appendChild(dot);
+    });
+
+    // ── 2.3) 확정 전 “삭제” 버튼 (빨간점)
+    const delBtn = document.createElement('button');
+    delBtn.className = 'clip-btn';               // 기존 스타일 재활용
+    delBtn.style.backgroundColor = '#dc3545';     // 빨간색
+    delBtn.style.left = `${centerX}px`;
+    delBtn.title     = '구간 삭제';
+    delBtn.addEventListener('click', () => {
+      if (confirm('이 검출 구간을 삭제하시겠습니까?')) {
+        timelineRanges.splice(idx, 1);
+        mergeRanges();   // 혹 인접 구간 간격 재조정
+        renderSegments();
+      }
+    });
+    controls.appendChild(delBtn);
+  });
+}
 window.addEventListener('DOMContentLoaded', () => {
   const videoFileInput = document.getElementById('videoFile');
   const videoPlayer    = document.getElementById('videoPlayer');
@@ -237,27 +308,44 @@ async function uploadChunks(file, sid, offset) {
 async function extractAndDetect(fn) {
   const st  = document.getElementById('startTime').value || '00:00:00';
   const res = await fetch('/extract_frames', {
-    method: 'POST',
-    body: new URLSearchParams({ video_file: fn, start_time: st })
+    method:'POST',
+    body:new URLSearchParams({ video_file:fn, start_time:st })
   });
   const { detected_times } = await res.json();
 
   currentVideoFile = fn;
   const player = document.getElementById('videoPlayer');
-  player.src   = `/static/uploads/${encodeURIComponent(fn.replace(/\.(sec|avi)$/i,'.mp4'))}`;
+  player.src = `/static/uploads/${encodeURIComponent(fn.replace(/\.(sec|avi)$/i,'.mp4'))}`;
   player.load();
   player.addEventListener('loadedmetadata', () => {
     player.currentTime = hms2sec(st);
-    buildTimelineWithDots(detected_times, player.duration);
+    videoDuration = player.duration;
 
-    // ① 검출 완료 후 UI 노출
-    document.getElementById('detectionSection').classList.remove('d-none');
+    // ── 연속 5초 이내 묶기 (클라이언트 기준) ──
+    const secs = Array.from(new Set(detected_times.map(t=>Math.floor(t)))).sort((a,b)=>a-b);
+    const tmpRanges = [];
+    let s=secs[0], p=secs[0];
+    for (let i=1; i<secs.length; i++){
+      if (secs[i] - p <= 5) {
+        p = secs[i];
+      } else {
+        tmpRanges.push({ start: s, end: p+1 });
+        s = p = secs[i];
+      }
+    }
+    tmpRanges.push({ start: s, end: p+1 });
+    timelineRanges = tmpRanges;
 
-    // ② 확정 버튼만 보이게, 다운로드 버튼은 숨김
+    // ── 렌더 & UI 노출 ──
+    const detSec = document.getElementById('detectionSection');
+    detSec.classList.remove('d-none');
     document.getElementById('confirmBtn').classList.remove('d-none');
     document.getElementById('downloadButtons').classList.add('d-none');
-  }, { once: true });
+
+    renderSegments();
+  }, { once:true });
 }
+
 
 
 async function finalizeSegments() {
@@ -380,65 +468,69 @@ function buildTimelineWithDots(detectedTimes, duration) {
   });
 }
 
+// ─── 4) 드래그 이벤트 후 병합 & 리렌더 ─────────────────
 function startDotDrag(e) {
   dragging = {
     dot        : e.target,
     idx        : +e.target.dataset.idx,
-    edge       : e.target.dataset.edge,       // 'left' | 'right'
+    edge       : e.target.dataset.edge,
     startX     : e.clientX,
     origLeftPx : parseFloat(e.target.style.left)
   };
   e.target.setPointerCapture(e.pointerId);
   document.addEventListener('pointermove', moveDotDrag);
-  document.addEventListener('pointerup',   endDotDrag, { once: true });
+  document.addEventListener('pointerup',   endDotDrag, { once:true });
 }
+
 
 function moveDotDrag(e) {
   if (!dragging) return;
   const wrapper = document.getElementById('timelineWrapper');
   const maxPx   = wrapper.offsetWidth;
-  const dxPx    = e.clientX - dragging.startX;
-  let newPx     = Math.min(Math.max(0, dragging.origLeftPx + dxPx), maxPx);
-
+  const dx      = e.clientX - dragging.startX;
+  let newPx     = dragging.origLeftPx + dx;
+  newPx = Math.max(0, Math.min(maxPx, newPx));
   dragging.dot.style.left = `${newPx}px`;
 
-  /* 초 단위로 환산하여 ranges 배열 업데이트 */
-  const newSec = (newPx / maxPx) * videoDuration;
-  const rng    = timelineRanges[dragging.idx];
-
+  // 영역 좌/우 갱신
+  const rng = timelineRanges[dragging.idx];
+  const sec = (newPx / maxPx) * videoDuration;
   if (dragging.edge === 'left') {
-    rng.start = Math.min(newSec, rng.end - 1);          // 최소 1초 보장
+    rng.start = Math.min(sec, rng.end - 1);
   } else {
-    rng.end   = Math.max(newSec, rng.start + 1);
+    rng.end   = Math.max(sec, rng.start + 1);
   }
-
+  // 바로 DOM 업데이트
   refreshSegmentDOM(dragging.idx);
 }
-
 function endDotDrag(e) {
-  if (dragging) dragging.dot.releasePointerCapture(e.pointerId);
-  dragging = null;
-  document.removeEventListener('pointermove', moveDotDrag);
+  if (dragging) {
+    dragging.dot.releasePointerCapture(e.pointerId);
+    document.removeEventListener('pointermove', moveDotDrag);
+    // ── 병합 & 리렌더 ──
+    mergeRanges();
+    renderSegments();
+    dragging = null;
+  }
 }
 
 /* ────────────────────────────────────────────────────────
    NEW ─ 선·점 위치 동기화
 ──────────────────────────────────────────────────────── */
 function refreshSegmentDOM(idx) {
-  const { start: s, end: e } = timelineRanges[idx];
-  const line = document.querySelectorAll('.segment-line')[idx];
-  const dots = document.querySelectorAll(`.segment-dot[data-idx="${idx}"]`);
-
+  const { start:s, end:e } = timelineRanges[idx];
   const wrapper = document.getElementById('timelineWrapper');
   const maxPx   = wrapper.offsetWidth;
-
-  line.style.left  = `${(s / videoDuration) * maxPx}px`;
-  line.style.width = `${((e - s) / videoDuration) * maxPx}px`;
-
-  dots.forEach(dot => {
-    const sec = (dot.dataset.edge === 'left') ? s : e;
-    dot.style.left = `${(sec / videoDuration) * maxPx}px`;
-  });
+  // 선
+  const line    = document.querySelectorAll('.segment-line')[idx];
+  line.style.left  = `${(s/videoDuration)*maxPx}px`;
+  line.style.width = `${((e-s)/videoDuration)*maxPx}px`;
+  // 점
+  document.querySelectorAll(`.segment-dot[data-idx="${idx}"]`)
+    .forEach(dot => {
+      const sec = dot.dataset.edge === 'left' ? s : e;
+      dot.style.left = `${(sec/videoDuration)*maxPx}px`;
+    });
 }
 
 
