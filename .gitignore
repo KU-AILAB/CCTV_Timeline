@@ -8,3 +8,4 @@ static/frames/
 *.pt
 all_yolo11x_imgsz640_orgin.pt   # 프로젝트마다 파일명 다르면 수정
 
+#nohup python3 /home/sjy/0529video/CCTV_Timeline_v2/app.py > /home/sjy/0529video/CCTV_Timeline_v2/app.log 2>&1 &

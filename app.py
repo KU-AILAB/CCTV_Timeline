@@ -160,7 +160,7 @@ def detect_times_preview(frames_folder: str, fps: float, offset_sec: float = 0) 
             continue
         dets = model(frame)[0].boxes.data.cpu().numpy()
         for *_, conf, cid in dets:
-            if conf > 0.2:                 # 기존 임계값과 동일
+            if conf > 0.4:                 # 기존 임계값과 동일
                 secs.add(int(t))           # 소수점 이하 버림
     return sorted(secs)
 
@@ -513,20 +513,23 @@ def extract_frames_api():
 def finalize_segments():
     """
     클라이언트가 보낸 최종 구간 정보로
-    ① 구간별 클립 생성 ② CSV/JSON 생성 후
-    다운로드 URL 을 JSON 으로 반환한다.
-    요청 형식: {
-        "video_file": "xxx.mp4",
-        "segments": [ {"start": 12.3, "end": 18.7}, ... ]
-    }
+    ① 기존 mp4 클립 삭제
+    ② 구간별 클립 생성
+    ③ CSV/JSON 저장 후 다운로드 URL 반환
     """
+    # 1) 이전 생성된 클립(.mp4) 삭제 → 중복 방지
+    for fname in os.listdir(DETECT_FOLDER):
+        if fname.lower().endswith('.mp4'):
+            os.remove(os.path.join(DETECT_FOLDER, fname))
+
+    # 2) 요청 파싱 및 유효성 검사
     data     = request.get_json(silent=True) or {}
     vf       = data.get('video_file')
     segments = data.get('segments', [])
     if not vf or not segments:
         return jsonify({'error': 'invalid payload'}), 400
 
-    src   = os.path.join(UPLOAD_FOLDER, vf)
+    src = os.path.join(UPLOAD_FOLDER, vf)
     if not os.path.exists(src):
         return jsonify({'error': 'file not found'}), 404
 
@@ -534,33 +537,39 @@ def finalize_segments():
     clip_urls = []
     rows      = []
 
+    # 3) 각 구간별 클립 생성
     for seg in segments:
         s = float(seg['start'])
         e = float(seg['end'])
-        if e <= s:                     # 방어 코드
+        if e <= s:
             continue
+
         clip_name = f"{name}_{format_seconds_to_hms(s)}_{format_seconds_to_hms(e)}.mp4"
         dest      = os.path.join(DETECT_FOLDER, clip_name)
         split_video_segment(src, dest, s, e)
-        clip_urls.append(url_for('download_clip', video_file=vf, start=s, end=e))
 
+        clip_urls.append(
+            url_for('download_clip', video_file=vf, start=s, end=e)
+        )
         rows.append({
             'time'  : f"{format_seconds_to_hms(s)}-{format_seconds_to_hms(e)}",
-            'animal': 'unknown'        # 필요 시 후처리 검출로 채우기
+            'animal': 'unknown'
         })
 
-    # CSV / JSON 저장
-    df = pd.DataFrame(rows)
-    csv_p  = os.path.join(DETECT_FOLDER, f"{name}_final.csv")
-    json_p = os.path.join(DETECT_FOLDER, f"{name}_final.json")
+    # 4) CSV/JSON 저장
+    df      = pd.DataFrame(rows)
+    csv_p   = os.path.join(DETECT_FOLDER, f"{name}_final.csv")
+    json_p  = os.path.join(DETECT_FOLDER, f"{name}_final.json")
     df.to_csv(csv_p,  index=False, encoding='utf-8')
     df.to_json(json_p, orient='records', force_ascii=False, indent=2)
 
+    # 5) 결과 URL 반환
     return jsonify({
         'clips': clip_urls,
         'csv'  : url_for('download_csv',  filename=os.path.basename(csv_p)),
         'json' : url_for('download_json', filename=os.path.basename(json_p))
     })
+
     
     
 # ── 다운로드 엔드포인트 ─────────────────────────────────────
@@ -619,5 +628,46 @@ def api_my_uploads_progress():
         {'id': v.id, 'progress': v.progress}
         for v in videos
     ])
+    
+import tempfile, shutil  # 파일 상단에 이미 import 되어 있지 않다면 추가하세요.
+
+@app.route('/download_zip/<filename>')
+@login_required
+def download_zip(filename):
+    import tempfile, os
+    from zipfile import ZipFile
+    # 1) 영상 기본 이름 추출
+    name = os.path.splitext(filename)[0]
+    # 2) 해당 영상 클립만 필터링
+    clip_files = [
+        f for f in os.listdir(DETECT_FOLDER)
+        if f.startswith(f"{name}_") and f.endswith('.mp4')
+    ]
+    if not clip_files:
+        return jsonify({'error': '클립 파일 없음'}), 404
+
+    # 3) 임시 ZIP 파일 생성
+    temp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
+    temp_zip.close()
+    with ZipFile(temp_zip.name, 'w') as zipf:
+        for f in clip_files:
+            # arcname으로 파일명만 지정해 ZIP 내부 구조 단순화
+            zipf.write(os.path.join(DETECT_FOLDER, f), arcname=f)
+
+    # 4) 클라이언트에 전송하고, 전송 완료 후 임시 파일 삭제
+    resp = send_file(
+        temp_zip.name,
+        as_attachment=True,
+        download_name=f"{name}_clips.zip"
+    )
+    @resp.call_on_close
+    def cleanup():
+        os.remove(temp_zip.name)
+
+    return resp
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=2312, debug=True)
+    app.run(host="0.0.0.0", port=2313, debug=True)
+
+

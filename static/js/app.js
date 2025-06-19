@@ -378,24 +378,34 @@ async function finalizeSegments() {
   document.getElementById('csvDownloadBtn').href  = data.csv;
   document.getElementById('jsonDownloadBtn').href = data.json;
 
-  // 2) 클립 버튼 생성 (원래대로, 위치는 detectionSection 아래)
+  // 2) 클립 버튼 생성
   const container = document.getElementById('timelineControls');
-  container.innerHTML = '';  // 이전 버튼 제거
-
+  container.innerHTML = '';
   timelineRanges.forEach((rng, idx) => {
     const startLabel = formatLabel(rng.start);
     const endLabel   = formatLabel(rng.end);
     const a = document.createElement('a');
-    a.href        = data.clips[idx];  // 서버가 준 다운로드 URL
+    a.href        = data.clips[idx];
     a.textContent = `${startLabel}~${endLabel}`;
     a.className   = 'btn btn-outline-primary btn-sm me-1';
     container.appendChild(a);
   });
 
-  // 3) UI 갱신
+  // 3) ZIP 다운로드 버튼 링크 업데이트
+  const zipBtn = document.getElementById('zipDownloadBtn');
+  if (zipBtn) {
+    const baseName = currentVideoFile.replace(/\.(sec|avi|mp4)$/i, '.mp4');
+    zipBtn.href = `/download_zip/${encodeURIComponent(baseName)}`;
+    zipBtn.classList.remove('d-none');
+  }
+
+  // 4) UI 갱신
   document.getElementById('confirmBtn').classList.add('d-none');
   document.getElementById('downloadButtons').classList.remove('d-none');
 }
+
+
+
 
 
 function buildTimelineWithDots(detectedTimes, duration) {
