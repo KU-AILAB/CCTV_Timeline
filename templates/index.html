@@ -9,7 +9,7 @@
 </head>
 <body class="bg-light">
 
-  <!-- 네비게이션 바 (원본 그대로) -->
+  <!-- 네비게이션 바 -->
   <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm fixed-top">
     <div class="container">
       <a class="navbar-brand fw-bold" href="#">KKU AI TIMELINE</a>
@@ -44,7 +44,7 @@
           </div>
           <div class="card-body">
             <form id="uploadForm" class="row gx-2 gy-3 align-items-end" enctype="multipart/form-data">
-              <!-- 1) 시작 시간 (col-sm-3) -->
+              <!-- 시작 시간 -->
               <div class="col-sm-3">
                 <label for="startTime" class="form-label">시작 시간</label>
                 <div class="input-group input-group-sm">
@@ -53,20 +53,43 @@
                          class="form-control" placeholder="00:00:00">
                 </div>
               </div>
-              <!-- 2) 파일 선택 (col-sm-7) -->
+
+              <!-- 파일 / 폴더 선택 -->
               <div class="col-sm-7">
-                <label for="videoFile" class="form-label">비디오 선택</label>
+                <label class="form-label">비디오/폴더 선택</label>
                 <div class="input-group input-group-sm">
                   <span class="input-group-text"><i class="bi-file-earmark-play"></i></span>
-                  <input type="file" id="videoFile" name="video_file"
-                         class="form-control" accept=".sec,video/*" required>
+                  <!-- 파일 선택 버튼 -->
+                  <button id="selectFileBtn" type="button" class="btn btn-outline-secondary btn-sm">
+                    파일 선택
+                  </button>
+                  <!-- 폴더 선택 버튼 -->
+                  <button id="selectFolderBtn" type="button" class="btn btn-outline-secondary btn-sm">
+                    폴더 선택
+                  </button>
+                  <!-- 선택된 파일명 표시 -->
+                  <span id="selectedFilesText" class="form-control">선택된 파일 없음</span>
+                  <!-- 숨겨진 실제 input 요소들 -->
+                  <input type="file"
+                         id="fileInput"
+                         accept=".sec,video/*"
+                         multiple
+                         hidden>
+                  <input type="file"
+                         id="folderInput"
+                         webkitdirectory
+                         directory
+                         hidden>
                 </div>
               </div>
-              <!-- 3) 업로드 버튼 (col-sm-2) -->
+
+              <!-- 업로드 버튼 -->
               <div class="col-sm-2 d-grid">
                 <button id="uploadOnlyBtn" class="btn btn-outline-secondary btn-sm">업로드</button>
               </div>
             </form>
+
+            <!-- 업로드 진행률 -->
             <div class="mt-3">
               <label class="form-label">업로드 진행률</label>
               <div class="progress" style="height:8px;">
@@ -85,9 +108,7 @@
           </div>
           <div class="card-body p-0 server-table-wrapper">
             <table class="table table-hover table-borderless mb-0 w-100">
-              <thead class="bg-light">
-                <tr><th class="ps-3">파일명</th></tr>
-              </thead>
+              <thead class="bg-light"><tr><th class="ps-3">파일명</th></tr></thead>
               <tbody id="serverVideos"></tbody>
             </table>
           </div>
@@ -98,31 +119,28 @@
       <div class="col-12">
         <div class="card shadow-sm">
           <div class="card-body">
-
             <!-- 비디오 플레이어 -->
             <div class="ratio ratio-16x9 mb-4">
               <video id="videoPlayer" controls class="w-100 h-100"></video>
             </div>
 
-            <!-- ◇ 타임라인 스크롤러 영역 ◇ -->
+            <!-- 타임라인 -->
             <div id="timelineScroller" class="timeline-scroller mb-3">
               <div id="timelineWrapper" class="timeline-wrapper">
-                <div id="timelines"       class="timeline-bg"></div>
-                <div id="dotsWrapper"     class="timeline-dots"></div>
+                <div id="timelines"   class="timeline-bg"></div>
+                <div id="dotsWrapper" class="timeline-dots"></div>
                 <div id="timelineProgress" class="timeline-progress"></div>
               </div>
               <div id="timelineControls" class="timeline-controls"></div>
             </div>
 
-            <!-- ◇ 탐지 결과 섹션 ◇ -->
+            <!-- 검출 결과 섹션 -->
             <div id="detectionSection" class="mt-4 d-none">
-              <!-- 검수 전에는 확정 버튼만 보임 -->
               <button id="confirmBtn" class="btn btn-success btn-sm">확정</button>
-              <!-- 확정 후에만 CSV/JSON 다운로드 버튼들 노출 -->
               <div id="downloadButtons" class="d-flex gap-2 mt-2 d-none">
                 <a id="csvDownloadBtn"  href="#" class="btn btn-outline-primary btn-sm">CSV</a>
                 <a id="jsonDownloadBtn" href="#" class="btn btn-outline-secondary btn-sm">JSON</a>
-                <a id="zipDownloadBtn" href="#" class="btn btn-outline-success btn-sm d-none">클립 일괄 다운로드</a>
+                <a id="zipDownloadBtn"  href="#" class="btn btn-outline-success btn-sm d-none">클립 일괄 다운로드</a>
               </div>
             </div>
 
@@ -133,6 +151,7 @@
     </div>
   </div>
 
+  <!-- 스크립트 로딩 -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>

@@ -282,3 +282,16 @@ body {
 #timelineProgress {
   cursor: ew-resize;
 }
+
+
+/* 1) input-group 내부 flex 아이템의 최소 너비를 0으로 해서 축소 가능하게 함 */
+.input-group .form-control {
+  min-width: 0;
+}
+
+/* 2) 선택된 파일명 영역 말줄임 처리 */
+#selectedFilesText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

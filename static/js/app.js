@@ -107,21 +107,58 @@ function renderSegments() {
   });
 }
 window.addEventListener('DOMContentLoaded', () => {
-  const videoFileInput = document.getElementById('videoFile');
-  const videoPlayer    = document.getElementById('videoPlayer');
-  const detectBtn      = document.getElementById('detectBtn');
-  const uploadOnlyBtn  = document.getElementById('uploadOnlyBtn');
-  const confirmBtn = document.getElementById('confirmBtn');
-  confirmBtn.addEventListener('click', e => {       // 클릭 시 서버 호출
-    e.preventDefault();
-    finalizeSegments();                             // 또는 confirmRanges()
+  // --- 숨겨진 input 요소 참조 ---
+  const fileInput         = document.getElementById('fileInput');
+  const folderInput       = document.getElementById('folderInput');
+
+  // --- 선택 버튼 참조 ---
+  const selectFileBtn     = document.getElementById('selectFileBtn');
+  const selectFolderBtn   = document.getElementById('selectFolderBtn');
+
+  // --- 선택된 파일명 표시 영역 ---
+  const selectedFilesText = document.getElementById('selectedFilesText');
+
+  // --- 기타 UI 요소 참조 ---
+  const videoPlayer       = document.getElementById('videoPlayer');
+  const detectBtn         = document.getElementById('detectBtn');
+  const uploadOnlyBtn     = document.getElementById('uploadOnlyBtn');
+  const confirmBtn        = document.getElementById('confirmBtn');
+
+  // 1) “파일 선택” / “폴더 선택” 버튼 클릭 시 각각 input 트리거
+  selectFileBtn.addEventListener('click',  () => fileInput.click());
+  selectFolderBtn.addEventListener('click',() => folderInput.click());
+
+  // 2) input change 시 선택된 파일명 표시
+  fileInput.addEventListener('change', () => {
+    const names = Array.from(fileInput.files).map(f => f.name);
+    selectedFilesText.textContent = names.length
+      ? names.join(', ')
+      : '선택된 파일 없음';
   });
-  // 이전 업로드 이어받기
+
+  folderInput.addEventListener('change', () => {
+    // 허용 확장자 필터링
+    const validExt = /\.(sec|avi|mp4|mov|mkv|wmv|flv|webm|mpeg|mpg|ts|m2ts|m4v)$/i;
+    const files = Array.from(folderInput.files)
+                       .filter(f => validExt.test(f.name));
+    const names = files.map(f => f.webkitRelativePath || f.name);
+    selectedFilesText.textContent = names.length
+      ? names.join(', ')
+      : '선택된 파일 없음';
+  });
+
+  // 3) 구간 확정 버튼
+  confirmBtn.addEventListener('click', e => {
+    e.preventDefault();
+    finalizeSegments();
+  });
+
+  // 4) 업로드 이어받기
   const pending = JSON.parse(localStorage.getItem('pendingUpload') || 'null');
   if (pending) {
     const pct = Math.round(pending.uploadedSize / pending.totalSize * 100);
-    alert(`업로드가 ${pct}% 진행된 파일이 있습니다.\n동일한 파일 선택 시 이어서 업로드를 진행합니다.`);
-    videoFileInput.addEventListener('change', e => {
+    alert(`업로드가 ${pct}% 진행된 파일이 있습니다.\n동일한 파일 선택 시 이어서 업로드합니다.`);
+    fileInput.addEventListener('change', e => {
       const f = e.target.files[0];
       if (f && f.name === pending.filename && f.size === pending.totalSize) {
         resumeUpload(f, pending.sessionId, pending.uploadedSize);
@@ -131,83 +168,120 @@ window.addEventListener('DOMContentLoaded', () => {
     }, { once: true });
   }
 
+  // 5) 서버 영상 목록 로드
   loadServerVideos();
 
-  // 재생 위치 표시 및 스크롤 동기화
+  // 6) 타임라인 재생 위치 표시 & 스크롤 동기화
   if (videoPlayer) {
     videoPlayer.addEventListener('timeupdate', () => {
       if (!videoPlayer.duration) return;
-      const prog = document.getElementById('timelineProgress');
-      const pct  = videoPlayer.currentTime / videoPlayer.duration * 100;
+      const prog     = document.getElementById('timelineProgress');
+      const pct      = (videoPlayer.currentTime / videoPlayer.duration) * 100;
       prog.style.left = `${pct}%`;
-      const scroller   = document.getElementById('timelineScroller');
-      const wrapper    = document.getElementById('timelineWrapper');
-      const totalWidth = wrapper.offsetWidth;
-      const currentX   = (videoPlayer.currentTime / videoPlayer.duration) * totalWidth;
-      const halfWidth  = scroller.clientWidth / 2;
-      scroller.scrollLeft = Math.max(0, currentX - halfWidth);
+      const scroller = document.getElementById('timelineScroller');
+      const wrapper  = document.getElementById('timelineWrapper');
+      const x        = pct / 100 * wrapper.offsetWidth;
+      scroller.scrollLeft = Math.max(0, x - scroller.clientWidth / 2);
     });
   }
 
-  // --- 변경: 타임라인 클릭으로 탐색 ---
+  // 7) 타임라인 클릭으로 탐색
   const wrapper = document.getElementById('timelineWrapper');
   if (wrapper && videoPlayer) {
     wrapper.addEventListener('click', e => {
-      const rect = wrapper.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const pct    = clickX / rect.width;
+      const r   = wrapper.getBoundingClientRect();
+      const pct = (e.clientX - r.left) / r.width;
       videoPlayer.currentTime = pct * videoPlayer.duration;
     });
   }
 
-  // --- 변경: 프로그레스바 드래그로 실시간 탐색 ---
-  const prog = document.getElementById('timelineProgress');
+  // 8) 프로그레스바 드래그 탐색
+  const progDrag = document.getElementById('timelineProgress');
   let isDragging = false;
-
-  if (prog && wrapper && videoPlayer) {
-    prog.addEventListener('pointerdown', e => {
+  if (progDrag && wrapper && videoPlayer) {
+    progDrag.addEventListener('pointerdown', e => {
       isDragging = true;
-      prog.setPointerCapture(e.pointerId);
+      progDrag.setPointerCapture(e.pointerId);
     });
-    prog.addEventListener('pointermove', e => {
+    progDrag.addEventListener('pointermove', e => {
       if (!isDragging) return;
-      const rect = wrapper.getBoundingClientRect();
-      let x = e.clientX - rect.left;
-      x = Math.max(0, Math.min(rect.width, x));
-      const pct = x / rect.width;
-      prog.style.left = `${pct * 100}%`;                                  // 변경: 프로그레스바 즉시 움직임
-      videoPlayer.currentTime = pct * videoPlayer.duration;               // 변경: 드래그 중 현재 시간 변경
+      const r = wrapper.getBoundingClientRect();
+      let x   = e.clientX - r.left;
+      x       = Math.max(0, Math.min(r.width, x));
+      const pct = x / r.width;
+      progDrag.style.left     = `${pct * 100}%`;
+      videoPlayer.currentTime = pct * videoPlayer.duration;
     });
-    prog.addEventListener('pointerup', e => {
+    progDrag.addEventListener('pointerup', e => {
       isDragging = false;
-      prog.releasePointerCapture(e.pointerId);
+      progDrag.releasePointerCapture(e.pointerId);
     });
   }
 
-  // Detect 버튼
+  // 9) Detect 버튼  — 첫 번째 선택된 파일만 검출
   if (detectBtn) {
-    detectBtn.addEventListener('click', e => {
+    detectBtn.addEventListener('click', async e => {
       e.preventDefault();
-      if (!videoFileInput || !videoFileInput.files[0]) {
-        return alert('파일을 선택하세요');
+      const allFiles = [...fileInput.files, ...folderInput.files];
+      if (!allFiles.length) {
+        return alert('파일 또는 폴더를 선택하세요');
       }
-      handleUploadAndDetect();
+      await handleUploadAndDetect(allFiles[0]);
     });
   }
 
-  // Upload Only 버튼
+  // 10) Upload Only 버튼 — 모든 선택된 파일 일괄 업로드
   if (uploadOnlyBtn) {
-    uploadOnlyBtn.addEventListener('click', e => {
+    uploadOnlyBtn.addEventListener('click', async e => {
       e.preventDefault();
-      uploadOnly();
+      const allFiles = [...fileInput.files, ...folderInput.files];
+      if (!allFiles.length) {
+        return alert('업로드할 파일(또는 폴더)을 선택하세요');
+      }
+      try {
+        for (const file of allFiles) {
+          // 세션 초기화
+          const initRes = await fetch('/upload/init', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename:   file.name,
+              total_size: file.size
+            })
+          });
+          const { session_id, uploaded_size } = await initRes.json();
+          localStorage.setItem('pendingUpload', JSON.stringify({
+            sessionId:    session_id,
+            filename:     file.name,
+            totalSize:    file.size,
+            uploadedSize: uploaded_size
+          }));
+          // 청크 업로드
+          await uploadChunks(file, session_id, uploaded_size);
+          localStorage.removeItem('pendingUpload');
+        }
+        alert('모든 영상 업로드가 완료되었습니다.');
+        loadServerVideos();
+      } catch (err) {
+        console.error(err);
+        alert('업로드 중 오류가 발생했습니다.');
+      }
     });
   }
 
-  // 서비스 워커 등록
+  // 11) 서비스 워커 등록
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js');
   }
 });
+
+// 이하 기존 함수들( uploadChunks, resumeUpload, handleUploadAndDetect,
+// extractAndDetect, finalizeSegments 등)은 변경 없이 유지해주세요.
+
+
+
+
 
 // 업로드 진행 바 업데이트
 function updateProgressBar(pct) {
