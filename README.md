@@ -1,4 +1,4 @@
-# 동영상 타임라인 검출 서비스 (KKU AI TIMELINE)
+# 동영상 타임라인 검출 서비스 
 
 [![Backend-FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](#)
 [![DB-MySQL](https://img.shields.io/badge/DB-MySQL-4479A1?logo=mysql&logoColor=white)](#)
