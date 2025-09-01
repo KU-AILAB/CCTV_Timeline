@@ -116,7 +116,7 @@ flowchart LR
 ---
 
 ## 데이터 모델(ERD)
-```
+```mermaid
 erDiagram
     users ||--o{ upload_sessions : owns
     users ||--o{ videos          : owns
