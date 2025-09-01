@@ -41,8 +41,7 @@
 
 ## 화면
 
-> 저장소에는 **`./assets/`** 폴더에 이미지를 배치해 사용합니다.  
-> (`upload_complete_alert.png`, `timeline_initial.png`, `timeline_marking.png`, `timeline_finalized.png`, `my_uploads.png`, `login.png`, `signup.png`)
+
 
 <p align="center">
   <img src="./assets/upload_complete_alert.png" alt="업로드 완료 알림 팝업" width="60%"><br/>
@@ -222,9 +221,9 @@ CCTV_Timeline/
 ---
 
 ## 내역할 & 성과
-내 역할 & 성과  
-수작업 집계 보조: 타임라인 시각화 + CSV로 고라니 출현 구간 집계 가능.  
-영상 활용성 향상: 특정 구간만 잘라 MP4 클립 추출.  
-대용량 안정성: 청크 업로드 + 재개 지원.  
-표준화: 비표준 확장자 인코딩(MP4) 통일.  
-확장성: YOLO11 모델 교체 시, 다른 동물 종도 동일 방식으로 처리 가능.  
+- 내 역할 & 성과  
+- 수작업 집계 보조: 타임라인 시각화 + CSV로 고라니 출현 구간 집계 가능.  
+- 영상 활용성 향상: 특정 구간만 잘라 MP4 클립 추출.  
+- 대용량 안정성: 청크 업로드 + 재개 지원.  
+- 표준화: 비표준 확장자 인코딩(MP4) 통일.  
+- 확장성: YOLO11 모델 교체 시, 다른 동물 종도 동일 방식으로 처리 가능.  
