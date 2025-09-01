@@ -41,37 +41,27 @@
 
 ## 화면
 
-
-
 <p align="center">
-  <img src="./assets/upload_complete_alert.png" alt="업로드 완료 알림 팝업" width="60%"><br/>
-  <em>업로드 완료 알림</em>
+  <img src="./assets/timeline_initial.png" alt="타임라인 초기화" width="40%">
+  <img src="./assets/timeline_marking.png" alt="타임라인 검출 표시" width="40%"><br/>
+  <em>타임라인 초기 상태 | 검출 구간 표시/드래그</em>
 </p>
 
 <p align="center">
-  <img src="./assets/timeline_initial.png" alt="타임라인 초기 상태" width="80%"><br/>
-  <em>서버 영상 선택 후 플레이어/타임라인 초기화</em>
+  <img src="./assets/upload_complete_alert.png" alt="업로드 완료 알림" width="40%">
+  <img src="./assets/my_uploads.png" alt="내 업로드 목록" width="40%"><br/>
+  <em>업로드 완료 알림 | 회원별 업로드 목록</em>
 </p>
 
 <p align="center">
-  <img src="./assets/timeline_marking.png" alt="검출 구간 표시/드래그" width="80%"><br/>
-  <em>검출 시간대 자동 마킹 + 드래그 편집</em>
+  <img src="./assets/timeline_finalized.png" alt="타임라인 확정 후" width="80%"><br/>
+  <em>확정 후 CSV/JSON/MP4 클립 다운로드</em>
 </p>
 
 <p align="center">
-  <img src="./assets/timeline_finalized.png" alt="확정 후 내보내기" width="80%"><br/>
-  <em>확정 후 CSV/JSON/클립 버튼 생성 + ZIP 다운로드</em>
-</p>
-
-<p align="center">
-  <img src="./assets/my_uploads.png" alt="내 업로드 목록" width="90%"><br/>
-  <em>회원별 업로드 진행률</em>
-</p>
-
-<p align="center">
-  <img src="./assets/login.png" alt="로그인" width="45%">
-  <img src="./assets/signup.png" alt="회원가입" width="45%"><br/>
-  <em>회원 인증</em>
+  <img src="./assets/login.png" alt="로그인" width="40%">
+  <img src="./assets/signup.png" alt="회원가입" width="40%"><br/>
+  <em>로그인 | 회원가입</em>
 </p>
 
 ---
@@ -157,10 +147,7 @@ erDiagram
     }
 
 ```
-
 ---
-
-
 ## API개요
 
 | 메소드    | 경로                    | 설명                    |
@@ -221,9 +208,8 @@ CCTV_Timeline/
 ---
 
 ## 내역할 & 성과
-- 내 역할 & 성과  
 - 수작업 집계 보조: 타임라인 시각화 + CSV로 고라니 출현 구간 집계 가능.  
 - 영상 활용성 향상: 특정 구간만 잘라 MP4 클립 추출.  
 - 대용량 안정성: 청크 업로드 + 재개 지원.  
 - 표준화: 비표준 확장자 인코딩(MP4) 통일.  
-- 확장성: YOLO11 모델 교체 시, 다른 동물 종도 동일 방식으로 처리 가능.  
+- 확장성: YOLO11 모델 교체 시, 다른 동물 종도 동일 방식으로 처리 가능. - 여러 모델 테스트 진행
